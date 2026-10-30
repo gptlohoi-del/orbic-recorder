@@ -1,14 +1,21 @@
-# Orbic Recorder Voice Filter v3.1 — Fixed source layout
+# Orbic Recorder v3.1.1 — correct-source package
 
-Đã chuyển `MainActivity.java` và `RecorderService.java` bản v3.1 vào đúng `app/src/main/java/com/example/orbicrecorder/`.
+Nguyên nhân giao diện cu: `MainActivity.java` / `RecorderService.java` v3.1 bi dat o thu muc goc, trong khi Gradle chi bien dich `app/src/main/java/com/example/orbicrecorder/` (dang la v3.0). File `build.yml` o goc cung khong duoc GitHub Actions su dung.
 
-Đã chuyển cấu hình build v3.1 vào `.github/workflows/build.yml`, xóa bản workflow trùng ở thư mục gốc và cập nhật `versionCode` lên 4, `versionName` thành `3.1-voice-filter`.
+## Upload len repository (quan trong)
 
-## Build
-1. Sao lưu repository hoặc tạo branch trước khi cập nhật.
-2. Upload nội dung thư mục này (không thêm một cấp thư mục bao ngoài) vào GitHub repository, ghi đè các file cũ.
-3. Xác nhận `.github/workflows/build.yml` đã được cập nhật.
-4. GitHub Actions -> Build Orbic Recorder v3.1 APK -> Run workflow, hoặc push sẽ tự chạy.
-5. Tải artifact `orbic-recorder-v31-apk`.
+1. Nên sao luu repo / tao branch truoc khi thay doi.
+2. Ghi de cac file trong goi ZIP nay vao dung **duong dan** trong repository. Khong dat nguyen thu muc ZIP thanh mot thu muc con trong repo.
+3. **XOA** 3 file nam o goc repository (neu co): `MainActivity.java`, `RecorderService.java`, `build.yml`. Chúng không được Gradle/GitHub Actions sử dụng nhưng rất dễ gây nhầm lẫn.
+4. Kiem tra `app/src/main/java/com/example/orbicrecorder/MainActivity.java` co dong `Voice Filter v3.1.1`.
+5. Kiem tra `app/build.gradle` la `versionCode 5`, `versionName '3.1.1-voice-filter'`.
+6. Kiem tra `.github/workflows/build.yml` co ten `Build Orbic Recorder v3.1.1 APK`.
+7. Commit va chay workflow `Build Orbic Recorder v3.1.1 APK`. Workflow se BAO LOI RO RANG neu van con Java o goc hoac giao dien cu.
+8. Tai artifact `orbic-recorder-v3.1.1-apk` tu lan build moi nhat. Tren man hinh phai hien `Voice Filter v3.1.1 • WAV 16 kHz`.
 
-Lưu ý: đây là APK debug, có thể không cài đè lên APK đã ký bằng khóa khác. Sao lưu file WAV trước khi gỡ ứng dụng. Chưa biên dịch/kiểm thử trong môi trường này.
+## Quan trong
+
+- Day la ma nguon, chua duoc bien dich/kiem thu APK trong moi truong nay.
+- APK debug co the khac chu ky voi phien ban cu: neu Android khong cho cai de, sao luu WAV truoc khi go cai dat.
+- `versionCode 5` giup phan biet ban moi nhung KHONG giai quyet sai khoa ky APK.
+- APK nay van la app Java thuan, **chua co OTA/PiP**.

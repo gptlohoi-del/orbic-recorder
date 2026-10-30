@@ -1,0 +1,56 @@
+name: Build Orbic Recorder v3.1.1 APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Verify correct UI sources are built
+        shell: bash
+        run: |
+          set -euo pipefail
+          UI='app/src/main/java/com/example/orbicrecorder/MainActivity.java'
+          SERVICE='app/src/main/java/com/example/orbicrecorder/RecorderService.java'
+          test -f "$UI"
+          test -f "$SERVICE"
+          grep -Fq 'Voice Filter v3.1.1' "$UI" || { echo 'ERROR: app/ MainActivity is not v3.1.1'; exit 1; }
+          grep -Fq 'TẠM DỪNG' "$UI" || { echo 'ERROR: Pause button missing'; exit 1; }
+          grep -Fq "versionName '3.1.1-voice-filter'" app/build.gradle || { echo 'ERROR: app/build.gradle is outdated'; exit 1; }
+          if [ -f MainActivity.java ] || [ -f RecorderService.java ]; then
+            echo 'ERROR: Old Java files found at repository root. Delete MainActivity.java and RecorderService.java at root.'
+            exit 1
+          fi
+          echo 'PASS: Correct v3.1.1 sources and version found.'
+
+      - name: Build debug APK
+        run: gradle --no-daemon :app:assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: orbic-recorder-v3.1.1-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
