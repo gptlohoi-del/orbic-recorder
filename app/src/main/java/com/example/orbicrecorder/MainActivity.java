@@ -29,7 +29,7 @@ import java.util.Collections;
 
 /** Native recorder from v4 + OTA-updateable local HTML/CSS/JS user interface. */
 public class MainActivity extends Activity {
-    private static final String NATIVE_LABEL = "ORBIC RECORDER v5.0";
+    private static final String NATIVE_LABEL = "ORBIC RECORDER v5.1";
     private static final String LOCAL_ORIGIN = "https://appassets.androidplatform.net";
     private static final int REQUEST_MIC = 101;
     private static final int REQUEST_FOLDER = 102;
@@ -48,6 +48,12 @@ public class MainActivity extends Activity {
                 web.loadUrl(LOCAL_ORIGIN + "/index.html");
             }
         }));
+        if (!RecorderService.isProcessCapturing()) {
+            // Stale SharedPreferences flags can survive an abrupt process kill.
+            recorder().edit().putBoolean("running", false).putBoolean("paused", false)
+                    .putBoolean("saving", false).apply();
+            RecordingArchive.recoverOnLaunch(this);
+        }
         buildWebView();
         // Check quietly on app opening; recording itself does not need Internet.
         ota.check();
@@ -116,6 +122,10 @@ public class MainActivity extends Activity {
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQUEST_MIC);
             return;
         }
+        if (RecordingArchive.isRecovering()) {
+            toast("Đang khôi phục bản ghi trước đó; vui lòng thử lại sau");
+            return;
+        }
         if (recorder().getBoolean("running", false) || recorder().getBoolean("saving", false)) return;
         try {
             startForegroundService(new Intent(this, RecorderService.class).setAction("START"));
@@ -169,6 +179,11 @@ public class MainActivity extends Activity {
                 data.put("elapsedMs", p.getLong("elapsedMs", 0L));
                 data.put("keptMs", p.getLong("keptMs", 0L));
                 data.put("segments", p.getInt("segments", 0));
+                data.put("part", p.getInt("part", 1));
+                data.put("savedParts", p.getInt("savedParts", 0));
+                data.put("recovering", RecordingArchive.isRecovering());
+                data.put("recoveryStatus", p.getString("recoveryStatus", ""));
+                data.put("lastRaw", p.getString("lastRaw", ""));
                 data.put("source", p.getString("source", "Chưa xác định"));
                 data.put("file", p.getString("file", "Chưa có"));
                 data.put("error", p.getString("error", ""));
@@ -178,6 +193,8 @@ public class MainActivity extends Activity {
                 data.put("threshold", cfg.getInt("threshold", -38));
                 data.put("minSpeech", cfg.getInt("minSpeech", 180));
                 data.put("warnSeconds", cfg.getInt("warnSeconds", 20));
+                data.put("backupRaw", cfg.getBoolean("backupRaw", true));
+                data.put("splitMinutes", cfg.getInt("splitMinutes", 15));
                 data.put("theme", cfg.getString("theme", "system"));
                 data.put("otaStatus", ota.getStatus());
                 data.put("otaMessage", ota.getMessage());
@@ -226,16 +243,21 @@ public class MainActivity extends Activity {
                 int pre = v.getInt("pre");
                 int tail = v.getInt("tail");
                 int warn = v.getInt("warnSeconds");
+                boolean backupRaw = v.optBoolean("backupRaw", config().getBoolean("backupRaw", true));
+                int splitMinutes = v.optInt("splitMinutes", config().getInt("splitMinutes", 15));
                 String theme = v.getString("theme");
                 if (threshold < -70 || threshold > -10 || minSpeech < 60 || minSpeech > 1000 ||
                         pre < 0 || pre > 5000 || tail < 100 || tail > 5000 ||
                         warn < 10 || warn > 120 ||
+                        !(splitMinutes == 1 || splitMinutes == 5 || splitMinutes == 10 ||
+                          splitMinutes == 15 || splitMinutes == 30 || splitMinutes == 60) ||
                         !(theme.equals("system") || theme.equals("light") || theme.equals("dark"))) {
                     throw new IllegalArgumentException("Giá trị ngoài giới hạn");
                 }
                 config().edit().putInt("threshold", threshold).putInt("minSpeech", minSpeech)
                         .putInt("pre", pre).putInt("tail", tail).putInt("warnSeconds", warn)
-                        .putString("theme", theme).apply();
+                        .putString("theme", theme).putBoolean("backupRaw", backupRaw)
+                        .putInt("splitMinutes", splitMinutes).apply();
                 runOnUiThread(() -> toast("Đã lưu cài đặt. Bộ lọc áp dụng ở phiên ghi tiếp theo."));
             } catch (Exception e) {
                 runOnUiThread(() -> toast("Không lưu được cài đặt: " + e.getMessage()));

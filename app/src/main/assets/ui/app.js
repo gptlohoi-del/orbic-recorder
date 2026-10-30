@@ -26,6 +26,8 @@
   function loadForm(d) {
     ['threshold','minSpeech','pre','tail','warnSeconds'].forEach(k => { $(k).value = d[k]; });
     $('theme').value = d.theme || 'system';
+    $('backupRaw').checked = d.backupRaw !== false;
+    $('splitMinutes').value = String(d.splitMinutes || 15);
     settingsLoaded = true;
   }
   function render(d) {
@@ -40,6 +42,10 @@
     setText('elapsed', fmt(d.elapsedMs));
     setText('kept', fmt(d.keptMs));
     setText('segments', d.segments || 0);
+    setText('part', d.part || 1);
+    setText('savedParts', d.savedParts || 0);
+    setText('rawStatus', 'Bản gốc: ' + (d.backupRaw ? 'BẬT' : 'TẮT') + ' • Chia file: ' + (d.splitMinutes || 15) + ' phút' + (d.lastRaw ? ' • ' + d.lastRaw : ''));
+    setText('recoveryStatus', d.recovering ? 'Đang khôi phục các file tạm…' : (d.recoveryStatus || ''));
     setText('preLabel', sec(d.pre));
     setText('tailLabel', sec(d.tail));
     setText('folderLabel', d.folder || 'Music/OrbicRecorder');
@@ -47,7 +53,7 @@
     setText('file', d.file || 'Chưa có bản ghi');
     setText('error', d.error || '');
     $('error').hidden = !d.error;
-    $('start').disabled = running || saving || d.otaStatus === 'downloading';
+    $('start').disabled = running || saving || !!d.recovering || d.otaStatus === 'downloading';
     $('pause').disabled = !running || saving;
     $('stop').disabled = !running || saving;
     $('pause').textContent = paused ? '▶ TIẾP TỤC' : 'Ⅱ PAUSE';
@@ -96,11 +102,14 @@
     const data = {};
     for (const key of ['threshold','minSpeech','pre','tail','warnSeconds']) data[key] = Number($(key).value);
     data.theme = $('theme').value;
+    data.backupRaw = $('backupRaw').checked;
+    data.splitMinutes = Number($('splitMinutes').value);
     if (!Number.isInteger(data.threshold) || data.threshold < -70 || data.threshold > -10 ||
         !Number.isInteger(data.minSpeech) || data.minSpeech < 60 || data.minSpeech > 1000 ||
         !Number.isInteger(data.pre) || data.pre < 0 || data.pre > 5000 ||
         !Number.isInteger(data.tail) || data.tail < 100 || data.tail > 5000 ||
-        !Number.isInteger(data.warnSeconds) || data.warnSeconds < 10 || data.warnSeconds > 120) {
+        !Number.isInteger(data.warnSeconds) || data.warnSeconds < 10 || data.warnSeconds > 120 ||
+        ![1,5,10,15,30,60].includes(data.splitMinutes)) {
       alert('Vui lòng nhập các giá trị đúng khoảng cho phép.'); return;
     }
     try { window.Orbic.saveSettings(JSON.stringify(data)); close(); settingsLoaded = false; }

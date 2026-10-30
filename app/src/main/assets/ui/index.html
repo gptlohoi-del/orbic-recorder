@@ -10,7 +10,7 @@
 <body>
   <main class="app">
     <header class="header">
-      <div><div class="eyebrow">GHI ÂM LỌC KHOẢNG LẶNG</div><h1>ORBIC RECORDER <span>v5.0</span></h1></div>
+      <div><div class="eyebrow">GHI ÂM LỌC KHOẢNG LẶNG</div><h1>ORBIC RECORDER <span>v5.1</span></h1></div>
       <button id="settingsToggle" class="icon-button" type="button" aria-label="Cài đặt">⚙</button>
     </header>
 
@@ -27,6 +27,7 @@
         <div class="metric"><span>ÂM THANH ĐÃ GIỮ</span><b id="kept">00:00:00</b></div>
         <div class="metric"><span>SỐ ĐOẠN</span><b id="segments">0</b></div>
       </div>
+      <div class="hints"><span>File số: <b id="part">1</b></span><span>Đã lưu: <b id="savedParts">0</b> đoạn</span></div>
       <div class="hints"><span>Giữ trước: <b id="preLabel">1,0s</b></span><span>Giữ sau: <b id="tailLabel">1,0s</b></span></div>
     </section>
 
@@ -39,7 +40,10 @@
       <button id="play" class="btn btn-secondary" type="button">▶ NGHE BẢN GHI GẦN NHẤT</button>
     </section>
 
-    <section class="file-box"><b>Vị trí lưu</b><div id="folderLabel">Music/OrbicRecorder</div><div id="file">Chưa có bản ghi</div><div class="error" id="error" hidden></div></section>
+    <section class="file-box"><b>Vị trí lưu</b><div id="folderLabel">Music/OrbicRecorder</div><div id="file">Chưa có bản ghi</div>
+      <div class="fine" id="rawStatus">Bản gốc: bật • Chia file: 15 phút</div>
+      <div class="fine" id="recoveryStatus"></div>
+      <div class="error" id="error" hidden></div></section>
 
     <section class="ota-card" aria-label="Cập nhật OTA">
       <div class="line"><strong><span class="tiny-icon">↻</span> CẬP NHẬT OTA</strong><small id="otaVersion">Giao diện 1.0.0</small></div>
@@ -65,6 +69,11 @@
       <label>Giữ trước khi nói (ms)<input id="pre" type="number" min="0" max="5000" step="100"></label>
       <label>Giữ sau khi nói (ms)<input id="tail" type="number" min="100" max="5000" step="100"></label>
       <label>Cảnh báo không có tín hiệu (giây)<input id="warnSeconds" type="number" min="10" max="120" step="5"></label>
+      <label class="toggle-label"><span>Lưu WAV gốc (không lọc khoảng lặng)<small>Đề xuất bật để tránh mất lời nói nhỏ. Tốn dung lượng hơn.</small></span><input id="backupRaw" type="checkbox" checked></label>
+      <label>Chia file mỗi
+        <select id="splitMinutes"><option value="1">1 phút (thử nghiệm)</option><option value="5">5 phút</option><option value="10">10 phút</option><option value="15">15 phút (mặc định)</option><option value="30">30 phút</option><option value="60">60 phút</option></select>
+      </label>
+      <p class="fine">Mỗi đoạn có WAV đã lọc và WAV gốc nếu bật sao lưu. Khi ứng dụng gặp sự cố, các WAV tạm sẽ được kiểm tra và khôi phục khi mở lại.</p>
       <label>Giao diện
         <select id="theme"><option value="system">Theo hệ thống</option><option value="light">Sáng</option><option value="dark">Tối</option></select>
       </label>
