@@ -2,6 +2,19 @@ plugins {
     id 'com.android.application'
 }
 
+// A release key is provided only by GitHub Actions / a local secure build.
+// Debug builds remain available without access to any signing secrets.
+def releaseStorePath = System.getenv('ORBIC_RELEASE_STORE_FILE')
+def releaseStorePassword = System.getenv('ORBIC_RELEASE_STORE_PASSWORD')
+def releaseKeyAlias = System.getenv('ORBIC_RELEASE_KEY_ALIAS')
+def releaseKeyPassword = System.getenv('ORBIC_RELEASE_KEY_PASSWORD')
+def releaseSigningReady = [releaseStorePath, releaseStorePassword, releaseKeyAlias, releaseKeyPassword]
+        .every { it != null && !it.isEmpty() }
+
+if (project.hasProperty('requireReleaseSigning') && !releaseSigningReady) {
+    throw new GradleException('Missing release signing environment variables (ORBIC_RELEASE_...).')
+}
+
 android {
     namespace 'com.example.orbicrecorder'
     compileSdk 35
@@ -10,16 +23,37 @@ android {
         applicationId 'com.example.orbicrecorder'
         minSdk 29
         targetSdk 32
-        versionCode 21
-        versionName '5.1-safe-recording-ota'
+        // Increase this for EVERY subsequent native APK release.
+        versionCode 22
+        versionName '5.1.1-safe-release'
+    }
+
+    signingConfigs {
+        release {
+            if (releaseSigningReady) {
+                storeFile file(releaseStorePath)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+                storeType 'pkcs12'
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // No minification: preserves the existing v5.1 native behavior.
+            minifyEnabled false
+            if (releaseSigningReady) {
+                signingConfig signingConfigs.release
+            }
+        }
     }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
-
-    // For a future native APK release, configure a stable production signing key.
 }
 
 tasks.withType(JavaCompile).configureEach {

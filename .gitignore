@@ -7,3 +7,9 @@ local.properties
 *.keystore
 *.pem
 .DS_Store
+
+# Never commit Android release signing keys
+*.p12
+*.pfx
+*keystore*.b64
+*keystore*.base64

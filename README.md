@@ -1,3 +1,7 @@
+# Bổ sung quy trình APK release cố định
+
+Xem [`RELEASE_SIGNING_GUIDE.md`](RELEASE_SIGNING_GUIDE.md). Giữ nguyên OTA và mã ghi âm.
+
 # Orbic Recorder v5.1 – Safe Recording + Web OTA
 
 Dựa trên Orbic Recorder **v5.0 Hybrid OTA** đã chạy thành công trên Orbic Q10 (Android 12). Giữ nguyên package `com.example.orbicrecorder`, cấu trúc OTA ký RSA, đường dẫn GitHub và API web v1; mở rộng **phần native** với ba cải tiến:
