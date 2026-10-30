@@ -1,16 +1,21 @@
-# Orbic Recorder – Voice Filter v3.0
+# Orbic Recorder Voice Filter v3.1
 
-Ghi WAV mono PCM 16-bit / 16 kHz; phát hiện đoạn có tín hiệu dựa trên RMS/dBFS, loại khoảng lặng dài và nối các đoạn được giữ thành một WAV trong `Music/OrbicRecorder`.
+Android Java native app (Android 10+, tested target: Android 12 Orbic Q10). Voice activity detection by **RMS amplitude threshold**, not AI voice recognition.
 
-## Cài đặt
-- Ngưỡng dBFS mặc định -38; tăng lên (ví dụ -30) để lọc tiếng nền mạnh hơn; giảm xuống (-45) để giữ tiếng nhỏ hơn.
-- Thời gian xác nhận tiếng: 180 ms.
-- Pre-roll: 300 ms.
-- Giữ phần cuối: 500 ms.
-- Các giá trị chỉ có hiệu lực từ lần ghi kế tiếp.
+## Features
+- Live audio level history (simple bars), status, elapsed capture time, kept duration, segment count.
+- START, PAUSE/RESUME (skips audio while paused), STOP AND SAVE; WAV 16 kHz mono PCM16.
+- Configurable threshold -70..-10 dBFS, minimum confirmation 60..1000 ms, pre-roll 0..5000 ms (default 1000), post-roll 100..5000 ms (default 1000).
+- Light/dark/system themes; default reset; open latest WAV in audio player.
+- Foreground microphone service; MediaStore Music/OrbicRecorder output.
+- No Google Translate integration; no OTA/PiP yet.
 
-## Build APK
-Upload nội dung thư mục này lên nhánh `main` của repo GitHub. Actions -> `Build Orbic Recorder Voice Filter APK` -> Run workflow. Tải artifact `orbic-recorder-voice-filter-apk`.
+## Build
+Upload contents of this folder (including hidden `.github/`) to your GitHub repo. Actions > Build Orbic Recorder v3.1 APK > Run workflow; download `orbic-recorder-v31-apk` artifact.
 
-## Giới hạn
-Đây là lọc khoảng lặng theo mức âm thanh (energy-based gate), không phải mô hình nhận diện tiếng nói (VAD AI). Tiếng ồn lớn có thể bị giữ, tiếng nói nhỏ có thể bị bỏ. Hãy thử với file ngắn trước. Không có chức năng Google Dịch, OTA, PiP hoặc chọn thư mục trong bản thử nghiệm này. Không tự động khôi phục WAV chưa hoàn tất khi ứng dụng bị đóng cưỡng bức.
+## Caveats
+- Amplitude gating may include noises or miss quiet speech. Test before important recordings.
+- Pre-roll is up to 1s *before threshold-crossing*; min confirmation frames are retained as well. Tail is up to 1s after last loud frame.
+- Pause discards captured frames and resets pre-roll on resume; total timer counts unpaused time.
+- Files are finalized at STOP; abrupt process termination may leave unfinished temporary WAV.
+- APK built as debug; if signatures differ, installing over a prior version can fail. Back up recordings first.
