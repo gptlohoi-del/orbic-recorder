@@ -1,0 +1,4 @@
+plugins { id 'com.android.application' }
+android { namespace 'com.example.orbicrecorder'; compileSdk 35
+    defaultConfig { applicationId 'com.example.orbicrecorder'; minSdk 26; targetSdk 32; versionCode 1; versionName '1.0-test' }
+}
