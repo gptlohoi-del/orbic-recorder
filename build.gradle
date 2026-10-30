@@ -1,4 +1,7 @@
-
-plugins {
-    id 'com.android.application' version '8.7.3' apply false
+plugins { id 'com.android.application' }
+android {
+    namespace 'com.example.orbicrecorder'
+    compileSdk 35
+    defaultConfig { applicationId 'com.example.orbicrecorder'; minSdk 29; targetSdk 32; versionCode 4; versionName '3.1-voice-filter' }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }
