@@ -1,9 +1,9 @@
 .gradle/
-build/
-app/build/
+**/build/
 .idea/
 *.iml
 local.properties
-*.apk
-*.aab
+*.jks
+*.keystore
+*.pem
 .DS_Store

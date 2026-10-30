@@ -78,7 +78,7 @@ public class RecorderService extends Service {
         PendingIntent toggleIntent = PendingIntent.getService(this, 5, toggle, flags);
         return new Notification.Builder(this, CHANNEL)
                 .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-                .setContentTitle("Orbic Recorder v4.0")
+                .setContentTitle("Orbic Recorder v5.0")
                 .setContentText(paused ? "Đang tạm dừng" : stopping ? "Đang lưu file" : "Đang lọc khoảng lặng")
                 .setOngoing(true)
                 .addAction(new Notification.Action.Builder(null, paused ? "TIẾP TỤC" : "PAUSE", toggleIntent).build())

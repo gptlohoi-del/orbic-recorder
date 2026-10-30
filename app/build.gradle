@@ -10,14 +10,16 @@ android {
         applicationId 'com.example.orbicrecorder'
         minSdk 29
         targetSdk 32
-        versionCode 10
-        versionName '4.0-voice-filter'
+        versionCode 20
+        versionName '5.0-hybrid-ota'
     }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+
+    // For a future native APK release, configure a stable production signing key.
 }
 
 tasks.withType(JavaCompile).configureEach {

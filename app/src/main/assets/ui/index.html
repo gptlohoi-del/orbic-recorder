@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>Orbic Recorder OTA</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <main class="app">
+    <header class="header">
+      <div><div class="eyebrow">GHI ÂM LỌC KHOẢNG LẶNG</div><h1>ORBIC RECORDER <span>v5.0</span></h1></div>
+      <button id="settingsToggle" class="icon-button" type="button" aria-label="Cài đặt">⚙</button>
+    </header>
+
+    <section class="signal-card">
+      <div class="line"><strong>SÓNG ÂM ĐẦU VÀO</strong><span id="db">— dBFS</span></div>
+      <div id="waveform" class="waveform" aria-label="Mức âm thanh đang thu"></div>
+      <div class="line small"><span id="capture">Sẵn sàng</span><span id="sourceShort">MIC</span></div>
+    </section>
+
+    <section class="status-area">
+      <div class="pill" id="status">○ SẴN SÀNG</div>
+      <div class="metrics">
+        <div class="metric"><span>TỔNG THỜI GIAN</span><b id="elapsed">00:00:00</b></div>
+        <div class="metric"><span>ÂM THANH ĐÃ GIỮ</span><b id="kept">00:00:00</b></div>
+        <div class="metric"><span>SỐ ĐOẠN</span><b id="segments">0</b></div>
+      </div>
+      <div class="hints"><span>Giữ trước: <b id="preLabel">1,0s</b></span><span>Giữ sau: <b id="tailLabel">1,0s</b></span></div>
+    </section>
+
+    <section class="controls">
+      <div class="pair">
+        <button id="start" class="btn btn-start" type="button">● BẮT ĐẦU GHI</button>
+        <button id="pause" class="btn btn-pause" type="button" disabled>Ⅱ PAUSE</button>
+      </div>
+      <button id="stop" class="btn btn-stop" type="button" disabled>■ DỪNG VÀ LƯU</button>
+      <button id="play" class="btn btn-secondary" type="button">▶ NGHE BẢN GHI GẦN NHẤT</button>
+    </section>
+
+    <section class="file-box"><b>Vị trí lưu</b><div id="folderLabel">Music/OrbicRecorder</div><div id="file">Chưa có bản ghi</div><div class="error" id="error" hidden></div></section>
+
+    <section class="ota-card" aria-label="Cập nhật OTA">
+      <div class="line"><strong><span class="tiny-icon">↻</span> CẬP NHẬT OTA</strong><small id="otaVersion">Giao diện 1.0.0</small></div>
+      <p id="otaMessage">Đang kiểm tra phiên bản...</p>
+      <div class="pair">
+        <button id="checkOta" class="btn btn-outline" type="button">KIỂM TRA</button>
+        <button id="installOta" class="btn btn-ota" type="button" disabled>CẬP NHẬT OTA</button>
+      </div>
+      <button id="rollback" type="button" class="text-button" hidden>↶ Quay lại giao diện trước</button>
+      <div class="fine">OTA chỉ thay đổi giao diện web. Phần ghi âm Android vẫn giữ nguyên.</div>
+    </section>
+
+    <p class="footer">Bộ lọc theo âm lượng không thể phân biệt hoàn toàn tiếng nói với tiếng động lớn.</p>
+  </main>
+
+  <div id="modal" class="modal" hidden>
+    <div class="modal-backdrop" id="modalBackdrop"></div>
+    <section class="dialog" role="dialog" aria-modal="true" aria-label="Cài đặt">
+      <div class="line dialog-head"><h2>CÀI ĐẶT</h2><button id="closeSettings" type="button" class="close">✕</button></div>
+      <p class="fine">Các thay đổi bộ lọc áp dụng từ phiên ghi tiếp theo.</p>
+      <label>Ngưỡng âm thanh (dBFS)<input id="threshold" type="number" min="-70" max="-10" step="1"></label>
+      <label>Xác nhận có tiếng (ms)<input id="minSpeech" type="number" min="60" max="1000" step="10"></label>
+      <label>Giữ trước khi nói (ms)<input id="pre" type="number" min="0" max="5000" step="100"></label>
+      <label>Giữ sau khi nói (ms)<input id="tail" type="number" min="100" max="5000" step="100"></label>
+      <label>Cảnh báo không có tín hiệu (giây)<input id="warnSeconds" type="number" min="10" max="120" step="5"></label>
+      <label>Giao diện
+        <select id="theme"><option value="system">Theo hệ thống</option><option value="light">Sáng</option><option value="dark">Tối</option></select>
+      </label>
+      <div class="folder-control">
+        <b>Thư mục lưu file</b><p id="settingsFolder">Music/OrbicRecorder</p>
+        <div class="pair"><button class="btn btn-outline" type="button" id="chooseFolder">CHỌN THƯ MỤC</button><button class="btn btn-outline" type="button" id="resetFolder">MẶC ĐỊNH</button></div>
+      </div>
+      <div class="pair dialog-actions"><button id="cancelSettings" class="btn btn-outline" type="button">ĐÓNG</button><button id="saveSettings" class="btn btn-start" type="button">LƯU</button></div>
+    </section>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
