@@ -1,3 +1,4 @@
+// ROOT build.gradle — do NOT place the app's android {} block here.
 plugins {
     id 'com.android.application' version '8.7.3' apply false
 }

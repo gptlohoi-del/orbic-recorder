@@ -1,67 +1,456 @@
 package com.example.orbicrecorder;
 
-import android.app.*;
-import android.content.*;
-import android.media.*;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.app.Service;
+import android.content.ContentValues;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.media.AudioDeviceInfo;
+import android.media.AudioFormat;
+import android.media.AudioRecord;
+import android.media.MediaRecorder;
 import android.net.Uri;
-import android.os.*;
+import android.os.Environment;
+import android.os.IBinder;
+import android.provider.DocumentsContract;
 import android.provider.MediaStore;
-import java.io.*;
-import java.text.SimpleDateFormat;
-import java.util.*;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.RandomAccessFile;
+import java.text.SimpleDateFormat;
+import java.util.ArrayDeque;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.Deque;
+import java.util.Locale;
+
+/**
+ * One microphone capture stream, simple amplitude-based voice activity detection.
+ * Each accepted section is joined into one WAV file, with configurable pre- and post-roll.
+ * This is NOT an AI speech recognizer: any sufficiently loud sound can be accepted.
+ */
 public class RecorderService extends Service {
-    private static final String CHANNEL="recording";
-    private volatile boolean recording=false;
+    private static final String CHANNEL = "orbic_recording_v4";
+    private static final int NOTIFICATION_ID = 141;
+    private static final int SAMPLE_RATE = 16000;
+    private static final int FRAME_MS = 20;
+    private static final int FRAME_SIZE = SAMPLE_RATE * 2 * FRAME_MS / 1000; // 640 PCM bytes
+
+    private volatile boolean recording = false;
+    private volatile boolean paused = false;
+    private volatile boolean stopping = false;
     private AudioRecord audio;
-    private File temp;
-    private Thread worker;
-    private void state(String k,Object v){SharedPreferences.Editor e=getSharedPreferences("state",MODE_PRIVATE).edit();if(v instanceof Integer)e.putInt(k,(Integer)v);else if(v instanceof Long)e.putLong(k,(Long)v);else if(v instanceof Boolean)e.putBoolean(k,(Boolean)v);else e.putString(k,String.valueOf(v));e.apply();}
-    private void log(String message){SharedPreferences p=getSharedPreferences("state",MODE_PRIVATE);String previous=p.getString("log","");String s=new SimpleDateFormat("HH:mm:ss",Locale.US).format(new Date())+" "+message+"\n"+previous;state("log",s.length()>5000?s.substring(0,5000):s);}
-    @Override public void onCreate(){super.onCreate();NotificationChannel c=new NotificationChannel(CHANNEL,"Orbic ghi âm",NotificationManager.IMPORTANCE_LOW);getSystemService(NotificationManager.class).createNotificationChannel(c);}
-    private Notification notification(){Intent stop=new Intent(this,RecorderService.class).setAction("STOP");PendingIntent pi=PendingIntent.getService(this,1,stop,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);return new Notification.Builder(this,CHANNEL).setSmallIcon(android.R.drawable.ic_btn_speak_now).setContentTitle("Orbic Recorder: lọc khoảng lặng").setContentText("Đang theo dõi tiếng nói • Nhấn DỪNG để lưu").setOngoing(true).addAction(new Notification.Action.Builder(null,"DỪNG VÀ LƯU",pi).build()).build();}
-    @Override public int onStartCommand(Intent i,int flags,int id){String action=i==null?"":i.getAction();if("STOP".equals(action)){recording=false;return START_NOT_STICKY;}if("START".equals(action)&&!recording){startForeground(101,notification());startRecording();}return START_NOT_STICKY;}
-    private void startRecording(){try{
-        int rate=16000;int min=AudioRecord.getMinBufferSize(rate,AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_16BIT);if(min<=0)throw new IOException("Sample rate không hỗ trợ");
-        audio=new AudioRecord.Builder().setAudioSource(MediaRecorder.AudioSource.MIC).setAudioFormat(new AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(rate).setChannelMask(AudioFormat.CHANNEL_IN_MONO).build()).setBufferSizeInBytes(Math.max(min*2,4096)).build();
-        if(audio.getState()!=AudioRecord.STATE_INITIALIZED)throw new IOException("Không khởi tạo được micro");
-        File dir=new File(getExternalFilesDir(null),"RecordingsTemp");if(!dir.exists()&&!dir.mkdirs())throw new IOException("Không tạo được thư mục tạm");
-        temp=new File(dir,"orbic_voice_"+new SimpleDateFormat("yyyyMMdd_HHmmss",Locale.US).format(new Date())+".wav");
-        audio.startRecording();recording=true;state("running",true);state("error","Không");state("file","Đang ghi...");state("keptMs",0L);state("segments",0);state("db","—");state("capture","Đang nghe");
-        AudioDeviceInfo d=audio.getRoutedDevice();state("source",d==null?"Chưa xác định":d.getProductName()+" (type "+d.getType()+")");log("Bắt đầu lọc khoảng lặng");
-        worker=new Thread(this::writeVoice,"VoiceWriter");worker.start();
-    }catch(Exception ex){state("error",ex.toString());log("Lỗi khởi động: "+ex);recording=false;state("running",false);if(audio!=null){audio.release();audio=null;}stopForeground(true);stopSelf();}}
-    private void writeVoice(){
-        final int rate=16000, frameBytes=640, frameMs=20;
-        SharedPreferences cfg=getSharedPreferences("config",MODE_PRIVATE);
-        final int threshold=cfg.getInt("threshold",-38), minSpeechMs=cfg.getInt("minSpeech",180), preMs=cfg.getInt("pre",300), tailMs=cfg.getInt("tail",500);
-        final int startFrames=Math.max(1,(minSpeechMs+frameMs-1)/frameMs), preFrames=Math.max(0,preMs/frameMs), tailFrames=Math.max(1,tailMs/frameMs);
-        Deque<byte[]> pre=new ArrayDeque<>();ArrayList<byte[]> candidate=new ArrayList<>();
-        int consecutive=0, silentFrames=0, segments=0;boolean active=false;long keptBytes=0;boolean completed=false;
-        byte[] frame=new byte[frameBytes];
-        try(RandomAccessFile out=new RandomAccessFile(temp,"rw")){
-            out.setLength(0);out.write(new byte[44]);
-            while(recording){int filled=0;while(filled<frameBytes&&recording){int n=audio.read(frame,filled,frameBytes-filled);if(n>0)filled+=n;else if(n<0)throw new IOException("AudioRecord.read="+n);}
-                if(filled<frameBytes)break;
-                byte[] block=Arrays.copyOf(frame,frameBytes);long energy=0;for(int j=0;j<frameBytes;j+=2){int sample=(short)((block[j]&255)|(block[j+1]<<8));energy+=(long)sample*sample;}
-                double rms=Math.sqrt((double)energy/(frameBytes/2));double db=20*Math.log10(Math.max(1,rms)/32768.0);boolean loud=db>=threshold;
-                state("db",String.format(Locale.US,"%.1f",db));state("level",(int)Math.min(100,rms*100/10000));
-                if(active){out.write(block);keptBytes+=frameBytes;if(loud)silentFrames=0;else silentFrames++;if(silentFrames>=tailFrames){active=false;consecutive=0;candidate.clear();pre.clear();silentFrames=0;state("capture","Đang chờ tiếng nói");}}
-                else if(loud){consecutive++;candidate.add(block);if(consecutive>=startFrames){active=true;segments++;for(byte[] b:pre){out.write(b);keptBytes+=b.length;}pre.clear();for(byte[] b:candidate){out.write(b);keptBytes+=b.length;}candidate.clear();state("capture","Đang giữ tiếng nói");log("Phát hiện đoạn tiếng nói #"+segments);}}
-                else {consecutive=0;candidate.clear();pre.addLast(block);while(pre.size()>preFrames)pre.removeFirst();state("capture","Đang bỏ khoảng lặng");}
-                state("segments",segments);state("keptMs",keptBytes*1000L/(rate*2));
+    private Thread writerThread;
+    private File tempFile;
+    private String destinationTree = "";
+
+    private SharedPreferences state() { return getSharedPreferences("state", MODE_PRIVATE); }
+    private SharedPreferences config() { return getSharedPreferences("config", MODE_PRIVATE); }
+
+    private void setState(String key, Object value) {
+        SharedPreferences.Editor editor = state().edit();
+        if (value instanceof String) editor.putString(key, (String) value);
+        else if (value instanceof Boolean) editor.putBoolean(key, (Boolean) value);
+        else if (value instanceof Long) editor.putLong(key, (Long) value);
+        else if (value instanceof Integer) editor.putInt(key, (Integer) value);
+        editor.apply();
+    }
+
+    @Override public void onCreate() {
+        super.onCreate();
+        NotificationChannel channel = new NotificationChannel(CHANNEL, "Orbic Recorder đang ghi",
+                NotificationManager.IMPORTANCE_LOW);
+        getSystemService(NotificationManager.class).createNotificationChannel(channel);
+    }
+
+    private Notification notification() {
+        Intent stop = new Intent(this, RecorderService.class).setAction("STOP");
+        Intent toggle = new Intent(this, RecorderService.class).setAction(paused ? "RESUME" : "PAUSE");
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
+        PendingIntent stopIntent = PendingIntent.getService(this, 4, stop, flags);
+        PendingIntent toggleIntent = PendingIntent.getService(this, 5, toggle, flags);
+        return new Notification.Builder(this, CHANNEL)
+                .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+                .setContentTitle("Orbic Recorder v4.0")
+                .setContentText(paused ? "Đang tạm dừng" : stopping ? "Đang lưu file" : "Đang lọc khoảng lặng")
+                .setOngoing(true)
+                .addAction(new Notification.Action.Builder(null, paused ? "TIẾP TỤC" : "PAUSE", toggleIntent).build())
+                .addAction(new Notification.Action.Builder(null, "DỪNG VÀ LƯU", stopIntent).build())
+                .build();
+    }
+
+    private void updateNotification() {
+        getSystemService(NotificationManager.class).notify(NOTIFICATION_ID, notification());
+    }
+
+    @Override public int onStartCommand(Intent intent, int flags, int startId) {
+        String action = intent == null ? "" : intent.getAction();
+        if ("START".equals(action)) {
+            if (!recording && !stopping) {
+                startForeground(NOTIFICATION_ID, notification());
+                startCapture();
             }
-            writeHeader(out,keptBytes,rate);completed=true;
-        }catch(Exception ex){state("error",ex.toString());log("Lỗi ghi: "+ex);}finally{
-            recording=false;state("running",false);state("level",0);state("capture","Đã dừng");
-            if(audio!=null){try{audio.stop();}catch(Exception ignored){}audio.release();audio=null;}
-            if(completed){try{if(keptBytes>0){String path=exportToMusic(temp);state("file",path);log("Đã lưu "+segments+" đoạn, "+(keptBytes/32000)+" giây âm thanh");if(!temp.delete())log("Không xóa được file tạm");}else{state("file","Không có đoạn vượt ngưỡng; không tạo WAV");temp.delete();log("Không phát hiện đoạn tiếng nói");}}catch(Exception ex){state("error","Xuất file: "+ex);state("file","File tạm: "+temp.getAbsolutePath());log("Lỗi xuất file: "+ex);}}
-            stopForeground(true);stopSelf();
+        } else if ("STOP".equals(action)) {
+            if (recording) {
+                stopping = true;
+                recording = false;
+                setState("saving", true);
+                setState("capture", "ĐANG LƯU FILE");
+                updateNotification();
+            } else if (!stopping) stopSelf();
+        } else if ("PAUSE".equals(action)) {
+            if (recording && !stopping) {
+                paused = true;
+                setState("paused", true);
+                setState("capture", "TẠM DỪNG");
+                updateNotification();
+            }
+        } else if ("RESUME".equals(action)) {
+            if (recording && !stopping) {
+                paused = false;
+                setState("paused", false);
+                setState("capture", "ĐANG CHỜ TIẾNG NÓI");
+                updateNotification();
+            }
+        }
+        return START_NOT_STICKY;
+    }
+
+    private void startCapture() {
+        try {
+            int minimum = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT);
+            if (minimum <= 0) throw new IOException("Thiết bị không hỗ trợ 16 kHz mono");
+
+            audio = new AudioRecord.Builder()
+                    .setAudioSource(MediaRecorder.AudioSource.MIC)
+                    .setAudioFormat(new AudioFormat.Builder()
+                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                            .setSampleRate(SAMPLE_RATE)
+                            .setChannelMask(AudioFormat.CHANNEL_IN_MONO).build())
+                    .setBufferSizeInBytes(Math.max(minimum * 2, FRAME_SIZE * 4))
+                    .build();
+            if (audio.getState() != AudioRecord.STATE_INITIALIZED)
+                throw new IOException("Không khởi tạo được micro");
+
+            File base = getExternalFilesDir(null);
+            if (base == null) base = getFilesDir();
+            File directory = new File(base, "RecordingsTemp");
+            if (!directory.exists() && !directory.mkdirs())
+                throw new IOException("Không tạo được thư mục tạm");
+            String name = "orbic_voice_" + new SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US)
+                    .format(new Date()) + ".wav";
+            tempFile = new File(directory, name);
+            destinationTree = config().getString("treeUri", "");
+
+            audio.startRecording();
+            recording = true;
+            paused = false;
+            stopping = false;
+            SharedPreferences.Editor editor = state().edit();
+            editor.putBoolean("running", true).putBoolean("saving", false).putBoolean("paused", false)
+                    .putString("error", "").putString("capture", "ĐANG CHỜ TIẾNG NÓI")
+                    .putString("file", "Đang ghi: " + name)
+                    .putLong("elapsedMs", 0L).putLong("keptMs", 0L).putInt("segments", 0)
+                    .putInt("level", 0).putString("db", "—");
+            AudioDeviceInfo device = audio.getRoutedDevice();
+            editor.putString("source", device == null ? "Chưa xác định" :
+                    String.valueOf(device.getProductName()) + " (type " + device.getType() + ")");
+            editor.apply();
+            writerThread = new Thread(this::writeVoice, "OrbicVoiceWriter");
+            writerThread.start();
+        } catch (Exception error) {
+            recording = false;
+            paused = false;
+            stopping = false;
+            setState("running", false);
+            setState("saving", false);
+            setState("error", "Không bắt đầu ghi được: " + error.getMessage());
+            if (audio != null) {
+                try { audio.release(); } catch (Exception ignored) {}
+                audio = null;
+            }
+            stopForeground(true);
+            stopSelf();
         }
     }
-    private String exportToMusic(File src)throws IOException{ContentValues v=new ContentValues();v.put(MediaStore.Audio.Media.DISPLAY_NAME,src.getName());v.put(MediaStore.Audio.Media.MIME_TYPE,"audio/wav");v.put(MediaStore.Audio.Media.RELATIVE_PATH,Environment.DIRECTORY_MUSIC+"/OrbicRecorder");v.put(MediaStore.Audio.Media.IS_PENDING,1);Uri uri=getContentResolver().insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,v);if(uri==null)throw new IOException("MediaStore insert thất bại");boolean ok=false;try(InputStream in=new FileInputStream(src);OutputStream out=getContentResolver().openOutputStream(uri)){if(out==null)throw new IOException("Không mở được file đích");byte[] b=new byte[16384];int n;while((n=in.read(b))!=-1)out.write(b,0,n);out.flush();ok=true;}finally{if(!ok)getContentResolver().delete(uri,null,null);}ContentValues done=new ContentValues();done.put(MediaStore.Audio.Media.IS_PENDING,0);getContentResolver().update(uri,done,null,null);return "Music/OrbicRecorder/"+src.getName();}
-    private void writeHeader(RandomAccessFile o,long size,int rate)throws IOException{o.seek(0);o.writeBytes("RIFF");le32(o,size+36);o.writeBytes("WAVEfmt ");le32(o,16);le16(o,1);le16(o,1);le32(o,rate);le32(o,rate*2);le16(o,2);le16(o,16);o.writeBytes("data");le32(o,size);}
-    private void le16(RandomAccessFile o,long v)throws IOException{o.write((int)v&255);o.write((int)(v>>8)&255);}private void le32(RandomAccessFile o,long v)throws IOException{le16(o,v);le16(o,v>>16);}
-    @Override public void onDestroy(){recording=false;super.onDestroy();}
-    @Override public IBinder onBind(Intent i){return null;}
+
+    private static void trimDeque(Deque<byte[]> frames, int maximum) {
+        while (frames.size() > maximum) frames.removeFirst();
+    }
+
+    private static long writeFrames(RandomAccessFile out, Deque<byte[]> frames) throws IOException {
+        long size = 0;
+        for (byte[] frame : frames) {
+            out.write(frame);
+            size += frame.length;
+        }
+        frames.clear();
+        return size;
+    }
+
+    private static double rms(byte[] frame) {
+        long power = 0;
+        for (int i = 0; i + 1 < frame.length; i += 2) {
+            int sample = (short) ((frame[i] & 255) | (frame[i + 1] << 8));
+            power += (long) sample * sample;
+        }
+        return Math.sqrt((double) power / (frame.length / 2));
+    }
+
+    private void writeVoice() {
+        SharedPreferences cfg = config();
+        int threshold = cfg.getInt("threshold", -38);
+        int confirmFrames = Math.max(1, (cfg.getInt("minSpeech", 180) + FRAME_MS - 1) / FRAME_MS);
+        int preFrames = Math.max(0, (cfg.getInt("pre", 1000) + FRAME_MS - 1) / FRAME_MS);
+        int tailFrames = Math.max(1, (cfg.getInt("tail", 1000) + FRAME_MS - 1) / FRAME_MS);
+        int warnFrames = Math.max(1, cfg.getInt("warnSeconds", 20) * 1000 / FRAME_MS);
+
+        Deque<byte[]> pre = new ArrayDeque<>();
+        Deque<byte[]> candidate = new ArrayDeque<>();
+        Deque<byte[]> pendingSilence = new ArrayDeque<>();
+        boolean active = false, wasPaused = false, completed = false;
+        long keptBytes = 0L, elapsedFrames = 0L, sinceSignal = 0L;
+        int segments = 0;
+        byte[] frame = new byte[FRAME_SIZE];
+
+        try (RandomAccessFile out = new RandomAccessFile(tempFile, "rw")) {
+            out.setLength(0);
+            out.write(new byte[44]);
+            while (recording) {
+                int filled = 0;
+                while (recording && filled < FRAME_SIZE) {
+                    int n = audio.read(frame, filled, FRAME_SIZE - filled);
+                    if (n > 0) filled += n;
+                    else if (n < 0) throw new IOException("AudioRecord.read: " + n);
+                }
+                if (filled != FRAME_SIZE) break;
+
+                if (paused) {
+                    if (!wasPaused) {
+                        if (active) keptBytes += writeFrames(out, pendingSilence);
+                        pendingSilence.clear();
+                        candidate.clear();
+                        pre.clear();
+                        active = false;
+                        wasPaused = true;
+                    }
+                    setState("level", 0);
+                    continue;
+                }
+                if (wasPaused) {
+                    pre.clear();
+                    candidate.clear();
+                    pendingSilence.clear();
+                    active = false;
+                    wasPaused = false;
+                    sinceSignal = 0;
+                }
+
+                elapsedFrames++;
+                byte[] block = Arrays.copyOf(frame, FRAME_SIZE);
+                double amplitude = rms(block);
+                double db = 20 * Math.log10(Math.max(1.0e-9, amplitude / 32768.0));
+                boolean loud = db >= threshold;
+                sinceSignal = loud ? 0 : sinceSignal + 1;
+
+                if (active) {
+                    if (loud) {
+                        keptBytes += writeFrames(out, pendingSilence);
+                        out.write(block);
+                        keptBytes += block.length;
+                    } else {
+                        pendingSilence.addLast(block);
+                        if (pendingSilence.size() > tailFrames) {
+                            // Preserve only the configured tail, then discard the rest of the silence.
+                            for (int i = 0; i < tailFrames; i++) {
+                                byte[] b = pendingSilence.removeFirst();
+                                out.write(b);
+                                keptBytes += b.length;
+                            }
+                            pre.clear();
+                            while (!pendingSilence.isEmpty()) pre.addLast(pendingSilence.removeFirst());
+                            trimDeque(pre, preFrames);
+                            active = false;
+                        }
+                    }
+                } else if (loud) {
+                    candidate.addLast(block);
+                    if (candidate.size() >= confirmFrames) {
+                        active = true;
+                        segments++;
+                        keptBytes += writeFrames(out, pre);
+                        keptBytes += writeFrames(out, candidate);
+                    }
+                } else {
+                    while (!candidate.isEmpty()) pre.addLast(candidate.removeFirst());
+                    pre.addLast(block);
+                    trimDeque(pre, preFrames);
+                }
+
+                if (keptBytes >= 0xFFFFFF00L)
+                    throw new IOException("WAV đạt giới hạn 4GB. Hãy ghi các phiên ngắn hơn.");
+                if (elapsedFrames % 5 == 0) {
+                    int displayLevel = (int) Math.max(0, Math.min(100, (db + 60.0) * 100.0 / 60.0));
+                    String status = active ? "● ĐANG GIỮ ÂM THANH" : sinceSignal > warnFrames ?
+                            "! KHÔNG CÓ TIẾNG NÓI – KIỂM TRA NGUỒN" : "ĐANG LỌC KHOẢNG LẶNG";
+                    state().edit().putLong("elapsedMs", elapsedFrames * FRAME_MS)
+                            .putLong("keptMs", keptBytes * 1000 / (SAMPLE_RATE * 2))
+                            .putInt("segments", segments).putInt("level", displayLevel)
+                            .putString("db", String.format(Locale.US, "%.1f", Math.max(-120.0, db)))
+                            .putString("capture", status).apply();
+                }
+                // Periodically write a valid WAV header even before STOP, reducing crash losses.
+                if (elapsedFrames % 250 == 0) {
+                    long position = out.getFilePointer();
+                    writeHeader(out, keptBytes, SAMPLE_RATE);
+                    out.seek(position);
+                }
+            }
+            if (active && !pendingSilence.isEmpty()) keptBytes += writeFrames(out, pendingSilence);
+            writeHeader(out, keptBytes, SAMPLE_RATE);
+            completed = true;
+        } catch (Exception error) {
+            setState("error", "Ghi âm: " + error.getMessage());
+        } finally {
+            recording = false;
+            paused = false;
+            setState("running", false);
+            setState("paused", false);
+            setState("level", 0);
+            setState("capture", "ĐÃ DỪNG");
+            state().edit().putLong("elapsedMs", elapsedFrames * FRAME_MS)
+                    .putLong("keptMs", keptBytes * 1000 / (SAMPLE_RATE * 2))
+                    .putInt("segments", segments).apply();
+            if (audio != null) {
+                try { audio.stop(); } catch (Exception ignored) {}
+                try { audio.release(); } catch (Exception ignored) {}
+                audio = null;
+            }
+            if (completed) {
+                try {
+                    if (keptBytes > 0) {
+                        Uri saved;
+                        String location;
+                        try {
+                            if (destinationTree.isEmpty()) throw new IllegalStateException("Dùng thư mục mặc định");
+                            saved = exportToChosenFolder(tempFile, destinationTree);
+                            location = config().getString("folderLabel", "Thư mục tùy chọn");
+                        } catch (Exception customError) {
+                            // Never silently drop a recording if the chosen folder is unavailable.
+                            saved = exportToMusic(tempFile);
+                            location = "Music/OrbicRecorder";
+                            if (!destinationTree.isEmpty()) setState("error", "Không ghi được thư mục đã chọn; đã lưu dự phòng trong Music/OrbicRecorder");
+                        }
+                        state().edit().putString("uri", saved.toString())
+                                .putString("file", location + "/" + tempFile.getName()).apply();
+                        if (!tempFile.delete()) setState("error", "Đã lưu, nhưng không xóa được file tạm");
+                    } else {
+                        setState("file", "Không có đoạn vượt ngưỡng. Không tạo file WAV mới.");
+                        if (!tempFile.delete()) setState("error", "Không xóa được file ghi tạm rỗng");
+                    }
+                } catch (Exception exportError) {
+                    setState("error", "Không xuất được WAV: " + exportError.getMessage());
+                    setState("file", "Bản WAV tạm được giữ: " + tempFile.getAbsolutePath());
+                }
+            } else {
+                setState("file", "Ghi âm bị lỗi; file tạm được giữ nếu đã tạo");
+            }
+            stopping = false;
+            setState("saving", false);
+            stopForeground(true);
+            stopSelf();
+        }
+    }
+
+    private Uri exportToMusic(File source) throws IOException {
+        ContentValues values = new ContentValues();
+        values.put(MediaStore.Audio.Media.DISPLAY_NAME, source.getName());
+        values.put(MediaStore.Audio.Media.MIME_TYPE, "audio/wav");
+        values.put(MediaStore.Audio.Media.RELATIVE_PATH, Environment.DIRECTORY_MUSIC + "/OrbicRecorder");
+        values.put(MediaStore.Audio.Media.IS_PENDING, 1);
+        Uri uri = getContentResolver().insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values);
+        if (uri == null) throw new IOException("MediaStore không tạo được file đích");
+        boolean complete = false;
+        try {
+            copyFile(source, uri);
+            ContentValues published = new ContentValues();
+            published.put(MediaStore.Audio.Media.IS_PENDING, 0);
+            if (getContentResolver().update(uri, published, null, null) < 1)
+                throw new IOException("Không công bố được file WAV trong MediaStore");
+            complete = true;
+            return uri;
+        } finally {
+            if (!complete) {
+                try { getContentResolver().delete(uri, null, null); } catch (Exception ignored) {}
+            }
+        }
+    }
+
+    private Uri exportToChosenFolder(File source, String treeValue) throws Exception {
+        Uri tree = Uri.parse(treeValue);
+        Uri parent = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree));
+        Uri file = DocumentsContract.createDocument(getContentResolver(), parent, "audio/wav", source.getName());
+        if (file == null) throw new IOException("Không thể tạo file trong thư mục đã chọn");
+        boolean complete = false;
+        try {
+            copyFile(source, file);
+            complete = true;
+            return file;
+        } finally {
+            if (!complete) {
+                try { DocumentsContract.deleteDocument(getContentResolver(), file); } catch (Exception ignored) {}
+            }
+        }
+    }
+
+    private void copyFile(File source, Uri destination) throws IOException {
+        try (InputStream input = new FileInputStream(source);
+             OutputStream output = getContentResolver().openOutputStream(destination, "w")) {
+            if (output == null) throw new IOException("Không mở được file đích");
+            byte[] bytes = new byte[16384];
+            int count;
+            while ((count = input.read(bytes)) >= 0) {
+                if (count > 0) output.write(bytes, 0, count);
+            }
+            output.flush();
+        }
+    }
+
+    private static void writeHeader(RandomAccessFile output, long dataSize, int rate) throws IOException {
+        output.seek(0);
+        output.writeBytes("RIFF");
+        little32(output, dataSize + 36);
+        output.writeBytes("WAVEfmt ");
+        little32(output, 16);
+        little16(output, 1);
+        little16(output, 1);
+        little32(output, rate);
+        little32(output, rate * 2);
+        little16(output, 2);
+        little16(output, 16);
+        output.writeBytes("data");
+        little32(output, dataSize);
+    }
+    private static void little16(RandomAccessFile out, long value) throws IOException {
+        out.write((int) value & 0xFF);
+        out.write((int) (value >> 8) & 0xFF);
+    }
+    private static void little32(RandomAccessFile out, long value) throws IOException {
+        little16(out, value);
+        little16(out, value >> 16);
+    }
+
+    @Override public void onDestroy() {
+        recording = false;
+        super.onDestroy();
+    }
+    @Override public IBinder onBind(Intent intent) { return null; }
 }
