@@ -1,19 +1,20 @@
-# Orbic Recorder Test – Android 12
+# Orbic Recorder – Micro Conflict Test (Android 12)
 
-Ứng dụng thử nghiệm ghi WAV bằng AudioRecord trong Foreground Service và mở Google Dịch.
+Source project for an experimental APK. Choose MIC, VOICE_RECOGNITION, or UNPROCESSED before recording. Record audio, open Google Translate, start/stop its microphone, then inspect the WAV and in-app log.
 
-## Tạo APK
-1. Tạo repository GitHub mới, upload toàn bộ nội dung thư mục này (kể cả `.github/workflows/build-apk.yml`).
-2. Vào **Actions** → **Build Orbic Recorder APK** → **Run workflow**.
-3. Chờ build thành công → tải artifact `orbic-recorder-debug-apk` → giải nén → cài `app-debug.apk`.
-4. Nếu GitHub yêu cầu bật Actions, vào Settings → Actions → General để cho phép workflows.
+## Build via GitHub Actions
+Upload the **contents** of this project (including `.github`) to the root of your GitHub repo, commit to `main`, then open **Actions > Build Orbic Recorder Test APK > Run workflow**. Download the `orbic-recorder-test-apk` artifact after success and install the APK.
 
-## Thử nghiệm
-1. Cắm nguồn âm thanh 3.5 mm qua đầu vào hỗ trợ micro của điện thoại. Cổng tai nghe 3.5 mm không tự động có nghĩa là hỗ trợ line-in.
-2. Mở Orbic Recorder, cấp quyền microphone, bấm BẮT ĐẦU GHI.
-3. Quan sát **Nguồn** và **Mức tín hiệu**. Nếu 0 liên tục, kiểm tra dây TRRS/adapter và mức tín hiệu.
-4. Bấm MỞ GOOGLE DỊCH, nhấn MICRO trong Google Dịch, thử nói/phát âm thanh khoảng 15 giây.
-5. Kéo thông báo xuống, bấm DỪNG GHI. File WAV nằm tại Android/data/com.example.orbicrecorder/files/Recordings/ (trình quản lý file Android 12 có thể hạn chế truy cập thư mục này; có thể lấy bằng USB/ADB).
+**Important:** Debug APK signing may differ from a previously installed APK. If Android rejects the update due to a signature mismatch, do not uninstall the old app before backing up your recordings and other app data. For long-term production use, configure a stable release signing key.
 
-## Giới hạn
-Android có thể cấp micro cho Google Dịch và làm im lặng luồng ghi nền. APK này không vượt qua giới hạn hệ điều hành. Ghi WAV 16kHz mono 16-bit. Không tự động tải file lên mạng.
+## Test
+1. Grant microphone permission.
+2. Choose MIC, start recording and play steady audio into the 3.5 mm input.
+3. Open Google Translate and start microphone listening for ~20 seconds; stop listening and wait another ~20 seconds.
+4. Return to Recorder, stop, and inspect the WAV in `Music/OrbicRecorder/`.
+5. Repeat with VOICE_RECOGNITION and UNPROCESSED.
+6. Compare logs and recordings. Android may mute one capture stream; changing the audio source does not override OS policy.
+
+Note: The amplitude indicator reports the input samples, not the true source signal if Android has silenced the stream. Very low levels can also reflect silence at the mixer. Logs are in app preferences and are visible in the app; they do not include audio content.
+
+This is a diagnostic native app, **not yet** the Hybrid/OTA/overlay production release.
