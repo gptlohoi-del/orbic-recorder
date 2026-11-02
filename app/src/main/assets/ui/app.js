@@ -113,9 +113,12 @@
     renderAdvanced();settingsOpened=true;$('modal').hidden=false;
   }
   function closeSettings(){settingsOpened=false;$('modal').hidden=true;}
-  $('settingsToggle').onclick=openSettings;
+  // Nút Cài đặt cố định ngay trước trạng thái ở góc trên bên phải.
+  const gear=$('settingsToggle');
+  $('status').before(gear);
+  gear.title='Mở cài đặt';
+  gear.onclick=openSettings;
   $('closeSettings').onclick=$('closeBottom').onclick=$('modalBackdrop').onclick=closeSettings;
-  $('settingsScroll').addEventListener('scroll',()=>dimGear());
   $('theme').onchange=()=>{data.theme=$('theme').value;save({theme:data.theme});applyTheme();};
   $('backupRaw').onchange=()=>save({backupRaw:$('backupRaw').checked});
   $('splitMinutes').onchange=()=>save({splitMinutes:Number($('splitMinutes').value)});
@@ -144,35 +147,12 @@
   $('confirmCancel').onclick=()=>{$('confirm').hidden=true;pendingConfirm=null;};
   $('confirmYes').onclick=()=>{const action=pendingConfirm;pendingConfirm=null;$('confirm').hidden=true;if(action)send(action);};
 
-  // Move the gear with touch/mouse and save normalized position to Android preferences.
-  const gear=$('settingsToggle');let pointer=null, moved=false, lastScrollDim=0;
-  function placeGear(x,y){
-    const w=window.innerWidth,h=window.innerHeight;
-    gear.style.left=(cap(x,0,100)/100*Math.max(0,w-48))+'px';
-    gear.style.top=(cap(y,0,100)/100*Math.max(0,h-48))+'px';gear.style.right='auto';
-  }
-  function dimGear(){gear.classList.add('dim');lastScrollDim=Date.now();}
-  gear.addEventListener('pointerdown',e=>{pointer=e.pointerId;moved=false;gear.setPointerCapture(e.pointerId);gear.classList.remove('dim');});
-  gear.addEventListener('pointermove',e=>{
-    if(pointer!==e.pointerId||!(e.buttons||e.pointerType==='touch'))return;
-    moved=true;placeGear(e.clientX/Math.max(1,innerWidth-48)*100,e.clientY/Math.max(1,innerHeight-48)*100);
-  });
-  gear.addEventListener('pointerup',e=>{
-    if(pointer!==e.pointerId)return;pointer=null;
-    if(moved){
-      const x=cap(Math.round(parseFloat(gear.style.left)/Math.max(1,innerWidth-48)*100),0,100);
-      const y=cap(Math.round(parseFloat(gear.style.top)/Math.max(1,innerHeight-48)*100),0,100);
-      save({gearX:x,gearY:y});
-      gear.onclick=null;setTimeout(()=>gear.onclick=openSettings,50);
-    }
-  });
-  window.addEventListener('resize',()=>{if(current)placeGear(current.gearX??99,current.gearY??0);});
   function poll(){
     try {
       const d=JSON.parse(window.Orbic.snapshot());current=d;
       if(!settingsOpened && Object.keys(data).length===0){
         for(const spec of specs)data[spec.key]=d[spec.key]??spec.default;
-        data.theme=d.theme||'system';applyTheme();placeGear(d.gearX??99,d.gearY??0);
+        data.theme=d.theme||'system';applyTheme();
       }
       const playing=d.musicStatus!=='idle', changing=!!d.pendingMusic;
       const stopped=!d.running;
@@ -209,7 +189,6 @@
         for(const key of ['uiFont','uiOpacity','theme']) data[key]=d[key]??data[key];
         applyTheme();
       }
-      if(Date.now()-lastScrollDim>3000 && !settingsOpened)gear.classList.add('dim');
     }catch(e){setText('status','MẤT KẾT NỐI ANDROID');}
   }
   poll();setInterval(poll,220);
