@@ -11,6 +11,15 @@ def releaseKeyPassword = System.getenv('ORBIC_RELEASE_KEY_PASSWORD')
 def releaseSigningReady = [releaseStorePath, releaseStorePassword, releaseKeyAlias, releaseKeyPassword]
         .every { it != null && !it.isEmpty() }
 
+// Github Actions increases the native version automatically. Local builds keep
+// the repository's original version (22 / 5.1.1-safe-release).
+// This does not change the Android applicationId, certificate, or OTA protocol.
+def githubRunNumberText = System.getenv('GITHUB_RUN_NUMBER') ?: ''
+def githubRunNumber = githubRunNumberText ==~ /[0-9]+/ ? githubRunNumberText.toInteger() : 0
+if (githubRunNumber > Integer.MAX_VALUE - 22) {
+    throw new GradleException('GITHUB_RUN_NUMBER is too large for Android versionCode.')
+}
+
 if (project.hasProperty('requireReleaseSigning') && !releaseSigningReady) {
     throw new GradleException('Missing release signing environment variables (ORBIC_RELEASE_...).')
 }
@@ -23,9 +32,10 @@ android {
         applicationId 'com.example.orbicrecorder'
         minSdk 29
         targetSdk 32
-        // Increase this for EVERY subsequent native APK release.
-        versionCode 22
-        versionName '5.1.1-safe-release'
+        // GitHub run numbers are monotonic within each workflow.
+        // Keep versionCode above the existing v5.1.1 release (22) for upgrades.
+        versionCode (22 + githubRunNumber)
+        versionName (githubRunNumber > 0 ? "5.1.1.${githubRunNumber}" : '5.1.1-safe-release')
     }
 
     signingConfigs {
