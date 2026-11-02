@@ -7,7 +7,7 @@
 
     <application
         android:allowBackup="false"
-        android:label="Orbic Recorder OTA"
+        android:label="Recorder"
         android:icon="@android:drawable/ic_btn_speak_now"
         android:usesCleartextTraffic="false">
         <activity
