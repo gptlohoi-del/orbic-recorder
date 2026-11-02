@@ -21,21 +21,58 @@ FILES = ('index.html', 'app.css', 'app.js')
 OWNER = 'gptlohoi-del'
 REPO = 'orbic-recorder'
 NATIVE_API = 2
+VERSION_RE = re.compile(r'[0-9]{1,5}\.[0-9]{1,5}\.[0-9]{1,5}\Z')
+
+
+def version_tuple(text):
+    if not isinstance(text, str) or not VERSION_RE.fullmatch(text):
+        raise SystemExit(f'Invalid OTA version: {text!r} (expected N.N.N)')
+    return tuple(map(int, text.split('.')))
+
+
+def next_ota_version(java_source):
+    # The installed APK must see a version strictly newer than its embedded UI.
+    match = re.search(r'BUILTIN_VERSION\s*=\s*"([0-9.]+)"', java_source)
+    if not match:
+        raise SystemExit('Cannot find BUILTIN_VERSION in OtaManager.java')
+    newest = version_tuple(match.group(1))
+
+    latest = OUT / 'latest.json'
+    if latest.is_file():
+        older = json.loads(latest.read_text(encoding='utf-8'))['version']
+        newest = max(newest, version_tuple(older))
+
+    # Also avoid reusing a bundle number if latest.json is out of sync.
+    for bundle in (OUT / 'bundles').glob('*.zip'):
+        if VERSION_RE.fullmatch(bundle.stem):
+            newest = max(newest, version_tuple(bundle.stem))
+
+    major, minor, patch = newest
+    if patch >= 99999:
+        if minor >= 99999:
+            if major >= 99999:
+                raise SystemExit('OTA version components exceed 99999')
+            return f'{major + 1}.0.0'
+        return f'{major}.{minor + 1}.0'
+    return f'{major}.{minor}.{patch + 1}'
 
 
 def main():
     cli = argparse.ArgumentParser()
-    cli.add_argument('--version', required=True, help='Semantic version, e.g. 1.0.1')
+    cli.add_argument('--version', help='Optional manual override; normally version is automatic')
     cli.add_argument('--key', help='Private PEM file, for offline validation only')
     args = cli.parse_args()
-    version = args.version
-    if not re.fullmatch(r'[0-9]{1,5}\.[0-9]{1,5}\.[0-9]{1,5}', version):
-        raise SystemExit('OTA version must be N.N.N, e.g. 1.0.1')
     previous = OUT / 'latest.json'
-    if previous.is_file():
-        older = json.loads(previous.read_text(encoding='utf-8'))['version']
-        if tuple(map(int, version.split('.'))) <= tuple(map(int, older.split('.'))):
-            raise SystemExit(f'New OTA version must exceed {older}')
+    java_path = ROOT / 'app/src/main/java/com/example/orbicrecorder/OtaManager.java'
+    java_source = java_path.read_text(encoding='utf-8')
+    api_match = re.search(r'public static final int NATIVE_API\s*=\s*(\d+)', java_source)
+    if not api_match or int(api_match.group(1)) != NATIVE_API:
+        raise SystemExit('OTA nativeApi does not match OtaManager.java; update script before publishing')
+    minimum = next_ota_version(java_source)
+    version = args.version or minimum
+    if version_tuple(version) < version_tuple(minimum):
+        raise SystemExit(f'New OTA version must be at least {minimum}')
+    print(f'Chosen OTA version: {version} (minimum acceptable: {minimum})')
 
     bundle_folder = OUT / 'bundles'
     bundle_folder.mkdir(parents=True, exist_ok=True)
@@ -67,7 +104,6 @@ def main():
         private = temporary.name
     try:
         # Prevent publishing packages that every installed APK would reject.
-        java_source = (ROOT / 'app/src/main/java/com/example/orbicrecorder/OtaManager.java').read_text(encoding='utf-8')
         match = re.search(r'PUBLIC_KEY_B64\s*=\s*"([A-Za-z0-9+/=]+)"', java_source)
         if not match:
             raise SystemExit('Cannot find pinned OTA public key in OtaManager.java')
