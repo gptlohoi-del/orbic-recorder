@@ -1,4 +1,4 @@
-name: Build Orbic Recorder v5.1.1 Debug APK
+name: Build Recorder Debug APK
 
 on:
   workflow_dispatch:
@@ -30,7 +30,9 @@ jobs:
           test -f app/src/main/assets/ui/app.css
           test -f app/src/main/assets/ui/app.js
           grep -Fq "version '8.7.3' apply false" build.gradle
-          grep -Fq "versionName '5.1.1-safe-release'" app/build.gradle
+          grep -Fq 'versionCode (22 + githubRunNumber)' app/build.gradle
+          grep -Fq 'versionName (githubRunNumber > 0 ?' app/build.gradle
+          grep -Fq 'android:label="Recorder"' app/src/main/AndroidManifest.xml
           grep -Fq 'ORBIC RECORDER v5.1' app/src/main/java/com/example/orbicrecorder/MainActivity.java
           test ! -f MainActivity.java
           test ! -f RecorderService.java
@@ -59,9 +61,22 @@ jobs:
       - name: Build debug APK
         run: gradle --no-daemon --stacktrace :app:assembleDebug
 
-      - name: Upload APK
+      - name: Rename Debug APK to Recorder plus version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="5.1.1.${GITHUB_RUN_NUMBER}"
+          SOURCE="app/build/outputs/apk/debug/app-debug.apk"
+          TARGET="app/build/outputs/apk/debug/Recorder-${VERSION}-debug.apk"
+          test -s "$SOURCE"
+          cp "$SOURCE" "$TARGET"
+          test -s "$TARGET"
+          echo "RECORDER_VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Upload named Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: orbic-recorder-v5.1.1-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          name: Recorder-${{ env.RECORDER_VERSION }}-debug
+          path: app/build/outputs/apk/debug/Recorder-${{ env.RECORDER_VERSION }}-debug.apk
           if-no-files-found: error
+          retention-days: 30
