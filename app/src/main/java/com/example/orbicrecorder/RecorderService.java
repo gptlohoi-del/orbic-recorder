@@ -39,6 +39,8 @@ public class RecorderService extends Service {
     private volatile boolean recording;
     private volatile boolean paused;
     private volatile boolean stopping;
+    private volatile boolean musicHold;
+    private volatile boolean saveRequested;
     private AudioRecord audio;
     private Thread worker;
 
@@ -70,9 +72,9 @@ public class RecorderService extends Service {
                 .setSmallIcon(android.R.drawable.ic_btn_speak_now)
                 .setContentTitle("Orbic Recorder v5.1 – Bản ghi an toàn")
                 .setContentText(stopping ? "Đang hoàn thiện và lưu WAV" : paused ? "Đang tạm dừng" : "Đang thu và lọc âm thanh")
+                .setContentIntent(PendingIntent.getActivity(this, 0,
+                        new Intent(this, MainActivity.class), flags))
                 .setOngoing(true)
-                .addAction(new Notification.Action.Builder(null, paused ? "TIẾP TỤC" : "PAUSE", toggle).build())
-                .addAction(new Notification.Action.Builder(null, "DỪNG VÀ LƯU", stop).build())
                 .build();
     }
 
@@ -106,6 +108,19 @@ public class RecorderService extends Service {
                     notifyChanged();
                 }
                 break;
+            case "MUSIC_PAUSE":
+                if (recording && !stopping) {
+                    musicHold = true;
+                    state().edit().putBoolean("musicSuspended", false)
+                            .putString("capture", "ĐANG CHUYỂN SANG PHÁT NHẠC").apply();
+                }
+                break;
+            case "MUSIC_RESUME":
+                musicHold = false;
+                break;
+            case "SAVE":
+                if (recording && !stopping && !musicHold) saveRequested = true;
+                break;
             case "RESUME":
                 if (recording && !stopping) {
                     paused = false;
@@ -122,18 +137,7 @@ public class RecorderService extends Service {
     private void startCapture() {
         PROCESS_CAPTURING.set(true);
         try {
-            int min = AudioRecord.getMinBufferSize(RecordingArchive.SAMPLE_RATE,
-                    AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
-            if (min <= 0) throw new IOException("Thiết bị không hỗ trợ 16 kHz mono");
-            audio = new AudioRecord.Builder()
-                    .setAudioSource(MediaRecorder.AudioSource.MIC)
-                    .setAudioFormat(new AudioFormat.Builder()
-                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                            .setSampleRate(RecordingArchive.SAMPLE_RATE)
-                            .setChannelMask(AudioFormat.CHANNEL_IN_MONO).build())
-                    .setBufferSizeInBytes(Math.max(min * 2, FRAME_SIZE * 4)).build();
-            if (audio.getState() != AudioRecord.STATE_INITIALIZED)
-                throw new IOException("Không khởi tạo được AudioRecord");
+            audio = openMicrophone();
 
             SharedPreferences cfg = config();
             String session = RecordingArchive.makeSessionId();
@@ -143,9 +147,12 @@ public class RecorderService extends Service {
             recording = true;
             paused = false;
             stopping = false;
+            musicHold = false;
+            saveRequested = false;
             AudioDeviceInfo device = audio.getRoutedDevice();
             state().edit().putBoolean("running", true).putBoolean("saving", false)
-                    .putBoolean("paused", false).putString("error", "")
+                    .putBoolean("paused", false).putBoolean("musicSuspended", false)
+                    .putBoolean("starting", false).putString("error", "")
                     .putString("capture", "ĐANG CHỜ TIẾNG NÓI")
                     .putString("file", "Đang ghi phiên " + session)
                     .putLong("elapsedMs", 0).putLong("keptMs", 0)
@@ -162,11 +169,40 @@ public class RecorderService extends Service {
             recording = false;
             paused = false;
             stopping = false;
+            musicHold = false;
+            saveRequested = false;
             state().edit().putBoolean("running", false).putBoolean("saving", false)
-                    .putString("error", "Không bắt đầu được: " + e.getMessage()).apply();
+                    .putBoolean("starting", false).putString("error", "Không bắt đầu được: " + e.getMessage()).apply();
             if (audio != null) { try { audio.release(); } catch (Exception ignored) {} audio = null; }
             stopForeground(true);
             stopSelf();
+        }
+    }
+
+    private AudioRecord openMicrophone() throws IOException {
+        int min = AudioRecord.getMinBufferSize(RecordingArchive.SAMPLE_RATE,
+                AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
+        if (min <= 0) throw new IOException("Thiết bị không hỗ trợ 16 kHz mono");
+        AudioRecord result = new AudioRecord.Builder()
+                .setAudioSource(MediaRecorder.AudioSource.MIC)
+                .setAudioFormat(new AudioFormat.Builder()
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .setSampleRate(RecordingArchive.SAMPLE_RATE)
+                        .setChannelMask(AudioFormat.CHANNEL_IN_MONO).build())
+                .setBufferSizeInBytes(Math.max(min * 2, FRAME_SIZE * 4)).build();
+        if (result.getState() != AudioRecord.STATE_INITIALIZED) {
+            result.release();
+            throw new IOException("Không khởi tạo được AudioRecord");
+        }
+        return result;
+    }
+
+    private void releaseMicrophone() {
+        AudioRecord old = audio;
+        audio = null;
+        if (old != null) {
+            try { old.stop(); } catch (Exception ignored) {}
+            try { old.release(); } catch (Exception ignored) {}
         }
     }
 
@@ -215,6 +251,31 @@ public class RecorderService extends Service {
         try {
             current = RecordingArchive.open(this, session, part, saveRaw);
             while (recording) {
+                // IMPORTANT: release Android AudioRecord, not just mute its samples.
+                // The audio focus and music player start only after this acknowledgement.
+                if (musicHold) {
+                    if (active && !tail.isEmpty()) kept += flush(current, tail);
+                    tail.clear(); pre.clear(); candidate.clear();
+                    active = false;
+                    wasPaused = true;
+                    RecordingArchive.sync(current);
+                    releaseMicrophone();
+                    state().edit().putBoolean("musicSuspended", true)
+                            .putInt("level", 0).putString("db", "—")
+                            .putString("capture", "ĐANG PHÁT NHẠC – MICRO ĐÃ TẮT").apply();
+                    while (recording && musicHold) {
+                        try { Thread.sleep(40); } catch (InterruptedException ignored) {}
+                    }
+                    if (!recording) break;
+                    audio = openMicrophone();
+                    audio.startRecording();
+                    state().edit().putBoolean("musicSuspended", false)
+                            .putString("capture", paused ? "ĐANG TẠM DỪNG" : "ĐANG CHỜ TIẾNG ĐỘNG").apply();
+                    pre.clear(); candidate.clear(); tail.clear();
+                    wasPaused = false;
+                    silence = 0;
+                    continue;
+                }
                 int filled = 0;
                 while (recording && filled < FRAME_SIZE) {
                     int size = audio.read(frame, filled, FRAME_SIZE - filled);
@@ -238,6 +299,20 @@ public class RecorderService extends Service {
                     active = false; wasPaused = false; silence = 0;
                 }
 
+                if (saveRequested) {
+                    saveRequested = false;
+                    if (active && !tail.isEmpty()) kept += flush(current, tail);
+                    RecordingArchive.close(current);
+                    RecordingArchive.queueExport(this, current);
+                    current = null;
+                    part++;
+                    current = RecordingArchive.open(this, session, part, saveRaw);
+                    partFrames = 0;
+                    active = false;
+                    tail.clear(); pre.clear(); candidate.clear();
+                    state().edit().putInt("part", part)
+                            .putString("capture", "ĐÃ LƯU ĐOẠN – ĐANG LẮNG NGHE").apply();
+                }
                 byte[] block = Arrays.copyOf(frame, FRAME_SIZE);
                 elapsed++; partFrames++;
                 if (current.raw != null) {
@@ -320,15 +395,11 @@ public class RecorderService extends Service {
             recording = false;
             paused = false;
             state().edit().putBoolean("running", false).putBoolean("paused", false)
-                    .putBoolean("saving", true).putInt("level", 0)
+                    .putBoolean("saving", true).putBoolean("musicSuspended", false).putInt("level", 0)
                     .putLong("elapsedMs", elapsed * FRAME_MS)
                     .putLong("keptMs", kept * 1000L / RecordingArchive.BYTES_PER_SEC)
                     .putInt("segments", segments).putString("capture", "ĐANG LƯU FILE").apply();
-            if (audio != null) {
-                try { audio.stop(); } catch (Exception ignored) {}
-                try { audio.release(); } catch (Exception ignored) {}
-                audio = null;
-            }
+            releaseMicrophone();
             if (current != null) {
                 try {
                     RecordingArchive.close(current);
@@ -345,7 +416,8 @@ public class RecorderService extends Service {
                 stateValue("error", "Xuất WAV chưa hoàn tất: " + failure.getMessage());
             }
             stopping = false;
-            state().edit().putBoolean("saving", false).putString("capture", "ĐÃ DỪNG").apply();
+            musicHold = false;
+            state().edit().putBoolean("musicSuspended", false).putBoolean("saving", false).putString("capture", "ĐÃ DỪNG").apply();
             PROCESS_CAPTURING.set(false);
             stopForeground(true);
             stopSelf();

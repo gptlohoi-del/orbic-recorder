@@ -20,7 +20,7 @@ OUT = ROOT / 'ota'
 FILES = ('index.html', 'app.css', 'app.js')
 OWNER = 'gptlohoi-del'
 REPO = 'orbic-recorder'
-NATIVE_API = 1
+NATIVE_API = 2
 
 
 def main():

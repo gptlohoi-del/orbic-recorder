@@ -32,8 +32,8 @@ import java.util.zip.ZipInputStream;
  * The installed APK pins the RSA public key. Private key is only in GitHub Actions secrets.
  */
 public final class OtaManager {
-    public static final int NATIVE_API = 1;
-    public static final String BUILTIN_VERSION = "1.0.0";
+    public static final int NATIVE_API = 2;
+    public static final String BUILTIN_VERSION = "2.0.0";
     private static final String MANIFEST_URL =
             "https://raw.githubusercontent.com/gptlohoi-del/orbic-recorder/main/ota/latest.json";
     private static final String BUNDLE_PREFIX =
@@ -158,6 +158,12 @@ public final class OtaManager {
     }
 
     private void validateActiveBundle() {
+        // APK v2 requires the new music/settings bridge. Never load a v1 OTA
+        // retained across an Android APK upgrade.
+        if (preferences.getInt("nativeApi", 1) != NATIVE_API) {
+            preferences.edit().putString("active", BUILTIN_VERSION).putInt("nativeApi", NATIVE_API)
+                    .remove("previous").apply();
+        }
         String current = getActiveVersion();
         if (!BUILTIN_VERSION.equals(current) &&
                 (!versionValid(current) || !allPresent(bundleDir(current)))) {
@@ -186,6 +192,12 @@ public final class OtaManager {
         executor.execute(() -> {
             try {
                 JSONObject manifest = new JSONObject(new String(download(MANIFEST_URL, MAX_MANIFEST), StandardCharsets.UTF_8));
+                if (manifest.optInt("nativeApi", -1) != NATIVE_API) {
+                    offeredManifest = null;
+                    offeredVersion = "";
+                    report("incompatible", "OTA hiện tại thuộc thế hệ APK khác; cần phát hành OTA nativeApi=" + NATIVE_API);
+                    return;
+                }
                 if (!validSignature(manifest)) throw new SecurityException("Chữ ký OTA không hợp lệ");
                 String version = manifest.getString("version");
                 if (newer(version, getActiveVersion())) {
@@ -214,6 +226,12 @@ public final class OtaManager {
         executor.execute(() -> {
             File staging = null;
             try {
+                if (manifest.optInt("nativeApi", -1) != NATIVE_API) {
+                    offeredManifest = null;
+                    offeredVersion = "";
+                    report("incompatible", "OTA hiện tại thuộc thế hệ APK khác; cần phát hành OTA nativeApi=" + NATIVE_API);
+                    return;
+                }
                 if (!validSignature(manifest)) throw new SecurityException("Chữ ký OTA không hợp lệ");
                 String version = manifest.getString("version");
                 if (!newer(version, getActiveVersion())) throw new IOException("Phiên bản không mới hơn");

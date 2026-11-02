@@ -1,4 +1,4 @@
-name: Build Orbic Recorder Signed Release APK
+name: Optional signed Release APK (cần Release Key)
 
 on:
   workflow_dispatch:
@@ -65,11 +65,23 @@ jobs:
           test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
 
-      - name: Upload signed APK
+      - name: Rename signed Release APK to Recorder plus version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="6.0.${GITHUB_RUN_NUMBER}"
+          SOURCE="app/build/outputs/apk/release/app-release.apk"
+          TARGET="app/build/outputs/apk/release/Recorder-${VERSION}.apk"
+          test -s "$SOURCE"
+          cp "$SOURCE" "$TARGET"
+          test -s "$TARGET"
+          echo "RECORDER_VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Upload named signed Release APK
         uses: actions/upload-artifact@v4
         with:
-          name: orbic-recorder-v5.1.1-signed-release-apk
-          path: app/build/outputs/apk/release/app-release.apk
+          name: Recorder-${{ env.RECORDER_VERSION }}
+          path: app/build/outputs/apk/release/Recorder-${{ env.RECORDER_VERSION }}.apk
           if-no-files-found: error
           retention-days: 30
 
