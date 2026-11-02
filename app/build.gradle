@@ -11,21 +11,12 @@ def releaseKeyPassword = System.getenv('ORBIC_RELEASE_KEY_PASSWORD')
 def releaseSigningReady = [releaseStorePath, releaseStorePassword, releaseKeyAlias, releaseKeyPassword]
         .every { it != null && !it.isEmpty() }
 
-<<<<<<< HEAD
 // GitHub Actions increases the native version automatically. Local builds keep
 // the v6 native version number. Android debug builds need no release key.
 // This does not change the Android applicationId, certificate, or OTA protocol.
 def githubRunNumberText = System.getenv('GITHUB_RUN_NUMBER') ?: ''
 def githubRunNumber = githubRunNumberText ==~ /[0-9]+/ ? githubRunNumberText.toInteger() : 0
 if (githubRunNumber > Integer.MAX_VALUE - 100) {
-=======
-// Github Actions increases the native version automatically. Local builds keep
-// the repository's original version (22 / 5.1.1-safe-release).
-// This does not change the Android applicationId, certificate, or OTA protocol.
-def githubRunNumberText = System.getenv('GITHUB_RUN_NUMBER') ?: ''
-def githubRunNumber = githubRunNumberText ==~ /[0-9]+/ ? githubRunNumberText.toInteger() : 0
-if (githubRunNumber > Integer.MAX_VALUE - 22) {
->>>>>>> 8ae253e0fd81517ccdadb875678b79e98756b00c
     throw new GradleException('GITHUB_RUN_NUMBER is too large for Android versionCode.')
 }
 
@@ -43,13 +34,8 @@ android {
         targetSdk 32
         // GitHub run numbers are monotonic within each workflow.
         // Keep versionCode above the existing v5.1.1 release (22) for upgrades.
-<<<<<<< HEAD
         versionCode (100 + githubRunNumber)
         versionName (githubRunNumber > 0 ? "6.0.${githubRunNumber}" : '6.0')
-=======
-        versionCode (22 + githubRunNumber)
-        versionName (githubRunNumber > 0 ? "5.1.1.${githubRunNumber}" : '5.1.1-safe-release')
->>>>>>> 8ae253e0fd81517ccdadb875678b79e98756b00c
     }
 
     signingConfigs {

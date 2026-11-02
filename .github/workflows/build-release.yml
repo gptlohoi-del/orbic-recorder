@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 name: Optional signed Release APK (cần Release Key)
-=======
-name: Build Recorder Signed Release APK
->>>>>>> 8ae253e0fd81517ccdadb875678b79e98756b00c
 
 on:
   workflow_dispatch:
@@ -73,11 +69,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-<<<<<<< HEAD
           VERSION="6.0.${GITHUB_RUN_NUMBER}"
-=======
-          VERSION="5.1.1.${GITHUB_RUN_NUMBER}"
->>>>>>> 8ae253e0fd81517ccdadb875678b79e98756b00c
           SOURCE="app/build/outputs/apk/release/app-release.apk"
           TARGET="app/build/outputs/apk/release/Recorder-${VERSION}.apk"
           test -s "$SOURCE"

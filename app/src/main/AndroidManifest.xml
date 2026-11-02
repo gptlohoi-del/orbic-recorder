@@ -7,11 +7,7 @@
 
     <application
         android:allowBackup="false"
-<<<<<<< HEAD
         android:label="ORBIC RECORDER"
-=======
-        android:label="Recorder"
->>>>>>> 8ae253e0fd81517ccdadb875678b79e98756b00c
         android:icon="@android:drawable/ic_btn_speak_now"
         android:usesCleartextTraffic="false">
         <activity
