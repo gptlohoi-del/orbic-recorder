@@ -26,6 +26,12 @@ assert 'ACTION_OPEN_DOCUMENT_TREE' in activity, 'Android 9 needs a durable user-
 assert 'height:100vh;height:100dvh' in css
 assert 'max-height:96vh;max-height:96dvh' in css
 assert not any(token in js for token in ('?.', '??', 'replaceChildren', 'Object.fromEntries'))
-ET.parse(manifest)
+tree = ET.parse(manifest)
+app = tree.getroot().find("application")
+icon = app.attrib.get("{http://schemas.android.com/apk/res/android}icon")
+assert icon == "@mipmap/ic_launcher", f"APK must use local launcher icon for aapt dump badging; found {icon!r}"
+for density in ("mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"):
+    png = root / "app/src/main/res" / f"mipmap-{density}" / "ic_launcher.png"
+    assert png.is_file() and png.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n", f"Missing PNG launcher icon: {png}"
 assert 'com.example.orbicrecorder' in gradle
-print('PASS: Android 9 API 28, safe WAV fallback, old WebView syntax, manifest')
+print('PASS: Android 9 API 28, safe WAV fallback, old WebView syntax, local launcher icon')

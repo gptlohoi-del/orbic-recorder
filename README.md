@@ -1,3 +1,7 @@
+## Sửa lỗi GitHub Actions `android:icon` / `aapt dump badging`
+
+Bản này thay icon hệ thống `@android:drawable/ic_btn_speak_now` trong `AndroidManifest.xml` thành icon **đóng gói ngay trong APK**: `@mipmap/ic_launcher` (5 mật độ màn hình trong `app/src/main/res/mipmap-*/ic_launcher.png`). Nhờ vậy công cụ `aapt dump badging` có thể đọc icon từ gói ứng dụng, tránh lỗi `attribute value reference does not exist` tại bước xác minh APK. **Không cần thay đổi ngưỡng Android 9 (`minSdk 28`), mã Java, hay OTA.** Sau khi cập nhật, hãy chạy lại workflow **Tạo APK Orbic Recorder**; không phải chạy OTA.
+
 # ORBIC RECORDER v9.3 – tương thích Android 9 (API 28)
 
 **Đã sửa lỗi không cài được trên Android 9 do `minSdk 29` trong bản v9.2.**
