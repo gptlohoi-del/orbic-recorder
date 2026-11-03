@@ -56,6 +56,13 @@ assert 'MediaPlayer' in music and 'Math.min(Math.max(0, requestedFadeMs), remain
 assert 'void requestPause(int requestedFadeMs)' in music
 assert 'void requestStop(int requestedFadeMs)' in music
 assert 'listener.paused()' in music and 'listener.ended()' in music
+# Returning from PAUSE uses the same configurable time as PAUSE/STOP fade-out.
+assert 'music.resume(config().getInt("pauseStopFade", 2000))' in activity
+assert 'void resume(int requestedFadeMs)' in music
+assert 'SystemClock.uptimeMillis()' in music
+assert 'progress * progress * (3f - 2f * progress)' in music
+assert '450f' not in music
+assert 'Giảm âm PAUSE/STOP và tăng âm TIẾP' in js
 assert 'takePersistableUriPermission' in activity
 
 subprocess.run(['node', '--check', str(ui / 'app.js')], check=True)

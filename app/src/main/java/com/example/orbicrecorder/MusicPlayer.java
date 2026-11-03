@@ -8,6 +8,7 @@ import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 
 import org.json.JSONObject;
 
@@ -37,7 +38,9 @@ final class MusicPlayer {
     private volatile String title = "";
     private volatile int positionMs, durationMs;
     private int fadeInMs = 3000, fadeOutMs = 5000, volume = 80;
-    private int commandFadeStart, commandFadeDuration, resumeStart = -1;
+    private int commandFadeStart, commandFadeDuration;
+    private long resumeFadeStartMs = -1L;
+    private int resumeFadeDurationMs = 2000;
     private float commandFadeGain = 1f;
 
     private final Runnable ticker = new Runnable() {
@@ -49,9 +52,18 @@ final class MusicPlayer {
                 int remaining = Math.max(0, durationMs - positionMs);
                 float gainIn = fadeInMs <= 0 ? 1f : Math.min(1f, positionMs / (float) fadeInMs);
                 float gainOut = fadeOutMs <= 0 ? 1f : Math.min(1f, remaining / (float) fadeOutMs);
-                float resumeGain = resumeStart < 0 ? 1f :
-                        Math.min(1f, Math.max(0f, (positionMs - resumeStart) / 450f));
-                if (resumeGain >= 1f) resumeStart = -1;
+                // TIẾP: fade-in mềm dựa trên đồng hồ đơn điệu, không dựa vào
+                // vị trí phát nhạc (có thể cập nhật không đều sau PAUSE).
+                float resumeGain = 1f;
+                if (resumeFadeStartMs >= 0L) {
+                    float progress = resumeFadeDurationMs <= 0 ? 1f :
+                            Math.min(1f, Math.max(0f,
+                                    (SystemClock.uptimeMillis() - resumeFadeStartMs)
+                                            / (float) resumeFadeDurationMs));
+                    // Smoothstep: tăng êm từ 0, không nhảy âm đầu đoạn.
+                    resumeGain = progress * progress * (3f - 2f * progress);
+                    if (progress >= 1f) resumeFadeStartMs = -1L;
+                }
                 float command = 1f;
                 if (isFading()) {
                     float fraction = commandFadeDuration <= 0 ? 1f :
@@ -101,7 +113,7 @@ final class MusicPlayer {
         status = "loading";
         positionMs = 0;
         durationMs = 0;
-        resumeStart = -1;
+        resumeFadeStartMs = -1L;
         try {
             focus = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
                     .setAudioAttributes(attributes)
@@ -190,11 +202,13 @@ final class MusicPlayer {
         }
     }
 
-    void resume() {
+    void resume(int requestedFadeMs) {
         if (player != null && "paused".equals(status)) {
             try {
-                resumeStart = player.getCurrentPosition();
+                resumeFadeDurationMs = Math.max(0, Math.min(15000, requestedFadeMs));
+                // Chặn tiếng bật đột ngột trước khi bắt đầu phát lại.
                 player.setVolume(0f, 0f);
+                resumeFadeStartMs = SystemClock.uptimeMillis();
                 player.start();
                 status = "playing";
                 handler.removeCallbacks(ticker);
@@ -217,7 +231,7 @@ final class MusicPlayer {
         focus = null;
         positionMs = 0;
         durationMs = 0;
-        resumeStart = -1;
+        resumeFadeStartMs = -1L;
         commandFadeGain = 1f;
         title = "";
         if (notify && wasActive) listener.ended();

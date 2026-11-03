@@ -337,7 +337,7 @@ public class MainActivity extends Activity {
         }
         if (!p.getBoolean("running", false)) {
             pendingResume = false;
-            music.resume();
+            music.resume(config().getInt("pauseStopFade", 2000));
             return;
         }
         if (!holdRequested) {
@@ -347,7 +347,7 @@ public class MainActivity extends Activity {
         }
         if (p.getBoolean("musicSuspended", false)) {
             pendingResume = false;
-            music.resume();
+            music.resume(config().getInt("pauseStopFade", 2000));
         } else if (++waitCycles < 90) {
             mainThread.postDelayed(() -> waitForResumeMicRelease(true), 60);
         } else {

@@ -9,7 +9,7 @@
   const specs = [
     {key:'fadeIn', label:'Tăng dần âm lượng đầu bài',unit:'ms',default:3000,min:0,max:30000,step:500,group:'music'},
     {key:'fadeOut',label:'Giảm dần âm lượng cuối bài',unit:'ms',default:5000,min:0,max:30000,step:500,group:'music'},
-    {key:'pauseStopFade',label:'Giảm âm khi PAUSE / STOP nhạc',unit:'ms',default:2000,min:0,max:10000,step:250,hardMin:0,hardMax:15000,group:'music'},
+    {key:'pauseStopFade',label:'Giảm âm PAUSE/STOP và tăng âm TIẾP',unit:'ms',default:2000,min:0,max:10000,step:250,hardMin:0,hardMax:15000,group:'music'},
     {key:'musicVolume',label:'Âm lượng phát nhạc',unit:'%',default:80,min:0,max:100,step:5,group:'music'},
     {key:'listenDelay',label:'Trễ trước khi mở micro trở lại',unit:'ms',default:600,min:0,max:5000,step:100,group:'music'},
     {key:'threshold',label:'Ngưỡng phát hiện tiếng động',unit:'dBFS',default:-38,min:-70,max:-10,step:1,hardMin:-80,hardMax:-5,group:'rec'},
