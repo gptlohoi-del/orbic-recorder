@@ -32,8 +32,8 @@ import java.util.zip.ZipInputStream;
  * The installed APK pins the RSA public key. Private key is only in GitHub Actions secrets.
  */
 public final class OtaManager {
-    public static final int NATIVE_API = 6;
-    public static final String BUILTIN_VERSION = "6.0.0";
+    public static final int NATIVE_API = 7;
+    public static final String BUILTIN_VERSION = "7.0.0";
     private static final String MANIFEST_URL =
             "https://raw.githubusercontent.com/gptlohoi-del/orbic-recorder/main/ota/latest.json";
     private static final String BUNDLE_PREFIX =
@@ -158,7 +158,7 @@ public final class OtaManager {
     }
 
     private void validateActiveBundle() {
-        // APK v9.1 adds pre-recording AGC API detection. Never load an old OTA
+        // APK v9.2 adds native persistence for waveform style selection. Never load an old OTA
         // retained across an Android APK upgrade.
         if (preferences.getInt("nativeApi", 1) != NATIVE_API) {
             preferences.edit().putString("active", BUILTIN_VERSION).putInt("nativeApi", NATIVE_API)

@@ -1,4 +1,4 @@
-/* ORBIC v9 – fixed OneView. Main screen never scrolls; Settings scroll independently. */
+/* ORBIC v9.2 – selectable waveform styles; OneView stays fixed. */
 :root{font-family:Roboto,"Noto Sans",system-ui,sans-serif;color-scheme:light;--page:#f3f7f6;--panel:#fff;--ink:#183341;--muted:#657b86;--border:#dbe6e9;--shade:#eaf2f4;--green:#117958;--blue:#277295;--red:#ae3b4c;--yellow:#a27421;--font-scale:1;--panel-opacity:1;--wave-height:92px}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--page:#101c25;--panel:#1a2c37;--ink:#e2f2f4;--muted:#aabdc8;--border:#34505d;--shade:#243c48;--green:#0d7c61;--blue:#265f83;--red:#a34150;--yellow:#8b6b29}}
 :root[data-theme="dark"]{color-scheme:dark;--page:#101c25;--panel:#1a2c37;--ink:#e2f2f4;--muted:#aabdc8;--border:#34505d;--shade:#243c48;--green:#0d7c61;--blue:#265f83;--red:#a34150;--yellow:#8b6b29}
@@ -8,3 +8,27 @@
 @media(orientation:landscape) and (max-height:510px){.app{max-width:1000px;grid-template-columns:1fr 1.05fr;grid-template-rows:minmax(0,1fr) auto;gap:5px;padding:4px 7px}.music-stack{grid-column:1;grid-row:1;gap:4px}.record{grid-column:2;grid-row:1}.error{grid-column:1/-1;grid-row:2}.panel{padding:5px 7px;gap:3px}.track{grid-template-columns:71px 35px minmax(0,1fr);min-height:33px}.track:nth-child(2){grid-template-columns:minmax(0,1fr) 35px 71px}.pick{min-height:33px}.btn{min-height:35px;padding:4px;font-size:10px}.notice{min-height:49px;flex-direction:row}.floating-gear{flex-basis:42px;width:42px;height:42px}.record-controls .btn{min-height:38px;font-size:10px}.threshold-controls{min-height:34px}.threshold-controls button{min-height:33px}.wave-row{max-height:min(var(--wave-height),100px)}.dialog{max-height:97dvh}.dialog-header,.dialog-footer{padding:7px 12px}}
 @media(max-width:350px){.app{padding:5px;gap:5px}.panel{padding:5px 6px;gap:3px}.btn{font-size:10px;min-height:38px}.track{grid-template-columns:77px 37px minmax(0,1fr)}.track:nth-child(2){grid-template-columns:minmax(0,1fr) 37px 77px}.notice{min-height:56px}.wave-row{min-height:36px}}
 @media(max-height:620px) and (orientation:portrait){.app{gap:4px;padding-top:4px;padding-bottom:4px}.panel{padding:5px;gap:3px}.track{min-height:34px}.btn{min-height:36px}.wave-row{min-height:30px}.notice{min-height:51px}}
+
+/* Bộ hình sóng – chỉ thay đổi cách hiển thị, không tác động thu âm. */
+.waveform{overflow:hidden}
+.waveform .wave-bars,.waveform .wave-line-svg{position:absolute;inset:0;width:100%;height:100%}
+.waveform .wave-bars{align-items:flex-end}
+.waveform[data-style="mirror"] .wave-bars{align-items:center}
+.waveform[data-style="mirror"] .wave-bars .bar{background:linear-gradient(180deg,#5ef8d1 0%,#21be94 48%,#56edd1 100%);border-radius:10px;box-shadow:0 0 6px #1ae8a535}
+.waveform[data-style="mirror"] .wave-bars .bar.hot{background:#e9b560}
+.waveform[data-style="dots"] .wave-bars .bar{border-radius:0;background:radial-gradient(circle at center 5px,#30e4b5 2.25px,transparent 2.65px) center bottom/100% 10px repeat-y}
+.waveform[data-style="dots"] .wave-bars .bar.hot{background:radial-gradient(circle at center 5px,#f0c36c 2.25px,transparent 2.65px) center bottom/100% 10px repeat-y}
+.waveform:not([data-style="line"]) .wave-line-svg{display:none}
+.waveform[data-style="line"] .wave-bars{display:none}
+.waveform .threshold-mirror-line{display:none;position:absolute;left:0;right:0;border-top:2px dashed #ffb44d;opacity:.9;pointer-events:none;z-index:2}
+.waveform[data-style="mirror"] .threshold-mirror-line{display:block}
+.waveform .threshold-line{z-index:3}
+.wave-style-picker{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0 12px}
+.wave-style-option{position:relative;display:flex;flex-direction:column;gap:4px;min-width:0;padding:9px 9px 7px;border:2px solid var(--border);border-radius:11px;background:var(--panel);cursor:pointer;touch-action:manipulation}
+.wave-style-option.selected{border-color:#19a77f;background:color-mix(in srgb,var(--panel) 89%,#20c89a 11%)}
+.wave-style-option:focus-within{outline:2px solid var(--blue);outline-offset:1px}
+.wave-style-option .wave-style-top{display:flex;align-items:center;justify-content:space-between;gap:5px;font-size:11px;font-weight:800;color:var(--ink)}
+.wave-style-option input[type="radio"]{margin:0;width:19px;height:19px;accent-color:#118766;flex-shrink:0}
+.wave-style-option svg{display:block;width:100%;height:39px;overflow:visible;background:#132b35;border-radius:7px;padding:3px}
+.wave-style-option .wave-style-description{font-size:10px;color:var(--muted);min-height:2.4em;line-height:1.2}
+@media(max-width:350px){.wave-style-picker{gap:6px}.wave-style-option{padding:6px}.wave-style-option .wave-style-description{font-size:9px}}

@@ -38,8 +38,8 @@ ET.parse(manifest)
 man = manifest.read_text(encoding='utf-8')
 assert 'screenOrientation="fullSensor"' in man
 assert 'configChanges="orientation|screenSize|smallestScreenSize|keyboardHidden"' in man
-assert 'NATIVE_API = 6' in ota and 'BUILTIN_VERSION = "6.0.0"' in ota
-assert 'NATIVE_API = 6' in script
+assert 'NATIVE_API = 7' in ota and 'BUILTIN_VERSION = "7.0.0"' in ota
+assert 'NATIVE_API = 7' in script
 assert 'case "start": startRecording(); break;' in activity
 assert 'music.isBlockingMic() || pendingMusic || pendingResume' in activity
 assert 'case "musicPause": music.requestPause' in activity
@@ -84,6 +84,13 @@ assert all(f'id="{key}"' in html for key in
 assert 'AutomaticGainControl.isAvailable()' in activity
 assert 'data.put("agcSupported", agcSupported)' in activity
 assert 'typeof d.agcSupported' in js
+assert 'id="waveStylePicker"' in html
+assert 'id="waveLineSvg"' in html and 'id="thresholdMirrorLine"' in html
+assert 'renderStylePreviews()' in js and 'applyWaveStyle' in js
+assert all(f"key:'{key}'" in js for key in ['waveHeight'])
+assert 'data.put("waveStyle", cfg.getString("waveStyle", "mirror"))' in activity
+assert 'edit.putString("waveStyle", waveStyle)' in activity
+assert 'NATIVE_API = 7' in script
 assert 'CẦN CẬP NHẬT APK ĐỂ KIỂM TRA' in js
-assert 'NATIVE_API = 6' in script
-print('PASS: v9.1 source, device AGC availability, AGC/limiter, Settings, OTA API, JS syntax')
+assert 'NATIVE_API = 7' in script
+print('PASS: v9.2 source, device AGC availability, AGC/limiter, Settings, OTA API, JS syntax')

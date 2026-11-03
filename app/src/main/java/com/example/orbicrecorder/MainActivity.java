@@ -30,7 +30,7 @@ import java.util.Collections;
 
 /** Native recorder from v4 + OTA-updateable local HTML/CSS/JS user interface. */
 public class MainActivity extends Activity {
-    private static final String NATIVE_LABEL = "ORBIC RECORDER v9.1";
+    private static final String NATIVE_LABEL = "ORBIC RECORDER v9.2";
     private static final String LOCAL_ORIGIN = "https://appassets.androidplatform.net";
     private static final int REQUEST_MIC = 101;
     private static final int REQUEST_FOLDER = 102;
@@ -431,6 +431,7 @@ public class MainActivity extends Activity {
                 data.put("uiFont", cfg.getInt("uiFont", 100));
                 data.put("uiOpacity", cfg.getInt("uiOpacity", 100));
                 data.put("waveHeight", cfg.getInt("waveHeight", 92));
+                data.put("waveStyle", cfg.getString("waveStyle", "mirror"));
                 data.put("gearX", cfg.getInt("gearX", 99));
                 data.put("gearY", cfg.getInt("gearY", 0));
                 data.put("numericLimits", cfg.getString("numericLimits", "{}"));
@@ -538,6 +539,13 @@ public class MainActivity extends Activity {
                     if (!(theme.equals("system") || theme.equals("light") || theme.equals("dark")))
                         throw new IllegalArgumentException("Giao diện không hợp lệ");
                     edit.putString("theme", theme);
+                }
+                if (v.has("waveStyle")) {
+                    String waveStyle = v.getString("waveStyle");
+                    if (!(waveStyle.equals("bars") || waveStyle.equals("mirror") ||
+                          waveStyle.equals("line") || waveStyle.equals("dots")))
+                        throw new IllegalArgumentException("Kiểu sóng âm không hợp lệ");
+                    edit.putString("waveStyle", waveStyle);
                 }
                 if (v.has("backupRaw")) edit.putBoolean("backupRaw", v.getBoolean("backupRaw"));
                 for (String key : new String[]{"agcEnabled", "limiterEnabled", "overloadWarn"}) {

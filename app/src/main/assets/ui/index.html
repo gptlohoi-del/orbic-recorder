@@ -30,7 +30,14 @@
   </div>
   <section class="record panel" aria-label="Ghi theo tiếng động">
     <div class="heading"><strong>🎙 GHI THEO TIẾNG ĐỘNG</strong><span id="recordState">Sẵn sàng</span></div>
-    <div class="wave-row"><div class="waveform" id="waveform" aria-label="Sóng âm và vạch ngưỡng nhận tiếng động"><div class="wave-bars" id="waveBars"></div><div class="threshold-line" id="thresholdLine"><span>NGƯỠNG</span></div></div><b id="db">— dBFS</b></div>
+    <div class="wave-row"><div class="waveform" id="waveform" data-style="mirror" aria-label="Biểu đồ mức âm thanh và vạch ngưỡng phát hiện tiếng động">
+      <div class="wave-bars" id="waveBars" aria-hidden="true"></div>
+      <svg class="wave-line-svg" id="waveLineSvg" aria-hidden="true" viewBox="0 0 300 100" preserveAspectRatio="none">
+        <defs><linearGradient id="waveFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2cefc3" stop-opacity=".37"/><stop offset="100%" stop-color="#2cefc3" stop-opacity=".01"/></linearGradient></defs>
+        <path id="waveArea" fill="url(#waveFill)"></path><path id="waveLine" fill="none" stroke="#3aebc1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
+      </svg>
+      <div class="threshold-line" id="thresholdLine"><span>NGƯỠNG</span></div><div class="threshold-mirror-line" id="thresholdMirrorLine" aria-hidden="true"></div>
+    </div><b id="db">— dBFS</b></div>
     <div class="threshold-controls"><span>Ngưỡng âm thanh</span><div><button id="thresholdMinus" type="button" aria-label="Giảm ngưỡng phát hiện">−</button><strong id="thresholdValue">−38 dBFS</strong><button id="thresholdPlus" type="button" aria-label="Tăng ngưỡng phát hiện">+</button></div></div>
     <div class="record-controls"><button id="start" class="btn green" type="button">● START</button><button id="pause" class="btn yellow" type="button" disabled>Ⅱ PAUSE</button><button id="stop" class="btn red" type="button" disabled>■ DỪNG &amp; LƯU</button></div>
   </section>
@@ -42,6 +49,10 @@
     <header class="dialog-header"><h2 id="dialogTitle">⚙ CÀI ĐẶT</h2><button class="btn outline" id="closeSettings" type="button">✕ THOÁT</button></header>
     <div class="dialog-scroll" id="settingsScroll">
       <p class="hint">Mỗi thay đổi được tự lưu. Ngưỡng phát hiện và thông số chống quá tải áp dụng trong khoảng 100 ms khi micro đang hoạt động; các thông số lọc khác áp dụng cho phiên ghi tiếp theo. DỪNG &amp; LƯU sẽ kết thúc phiên ghi, không dừng nhạc.</p>
+      <details open><summary>🎨 GIAO DIỆN</summary>
+        <p class="hint">Kiểu sóng âm (xem trước và chạm để chọn). Thay đổi tức thì, tự lưu; không thay đổi độ nhạy micro hay file WAV.</p>
+        <div id="waveStylePicker" class="wave-style-picker" role="radiogroup" aria-label="Chọn kiểu sóng âm"></div>
+        <div id="viewNumbers" class="numeric-list"></div><label class="selectline">Chủ đề <select id="theme"><option value="system">Theo hệ thống</option><option value="light">Sáng</option><option value="dark">Tối</option></select></label></details>
       <details open><summary>♫ PHÁT NHẠC</summary><div id="musicNumbers" class="numeric-list"></div><p class="hint">PAUSE/STOP nhạc sẽ tiếp tục phát và giảm âm về 0 trong thời gian đã chọn (tối đa bằng phần nhạc còn lại). Khi nhạc phát micro tắt, nhưng các nút ghi âm vẫn dùng được. Nếu phiên ghi còn chạy, nhạc dừng sẽ trở lại nghe tiếng động.</p></details>
       <details open><summary>🎙 GHI ÂM</summary><div id="recNumbers" class="numeric-list"></div>
         <label class="checkline">Lưu WAV gốc (kể cả khoảng lặng) <input id="backupRaw" type="checkbox"></label>
@@ -56,9 +67,9 @@
         <div id="protectNumbers" class="numeric-list"></div>
         <p class="hint">Dòng hỗ trợ AGC kiểm tra API Android ngay cả khi chưa START; chỉ khi mở micro mới xác định AGC có bật được trên nguồn âm đang dùng hay không. Limiter chỉ giảm tín hiệu đã thu được, không thể sửa méo tiếng đã xảy ra ở micro hoặc mạch thu. WAV gốc dự phòng giữ dữ liệu trước Limiter phần mềm (có thể vẫn bị rè).</p>
       </details>
-      <details><summary>🎨 GIAO DIỆN</summary><div id="viewNumbers" class="numeric-list"></div><label class="selectline">Chủ đề <select id="theme"><option value="system">Theo hệ thống</option><option value="light">Sáng</option><option value="dark">Tối</option></select></label></details>
+
       <details><summary>📁 LƯU TRỮ</summary><p class="hint" id="settingsFolder">Music/OrbicRecorder</p><div class="settings-buttons"><button id="playLast" class="btn outline" type="button">▶ NGHE BẢN GHI GẦN NHẤT</button></div><div class="settings-buttons"><button id="chooseFolder" class="btn outline" type="button">CHỌN THƯ MỤC WAV</button><button id="resetFolder" class="btn outline" type="button">MẶC ĐỊNH</button></div></details>
-      <details><summary>↻ CẬP NHẬT OTA</summary><p class="hint" id="otaMessage">Chưa kiểm tra</p><p class="hint" id="otaVersion">Giao diện 6.0.0</p><div class="settings-buttons"><button id="checkOta" class="btn outline" type="button">KIỂM TRA</button><button id="installOta" class="btn blue" disabled type="button">CẬP NHẬT</button><button id="rollback" class="btn outline" hidden type="button">QUAY LẠI</button></div><p class="hint">OTA chỉ cập nhật HTML/CSS/JS có chữ ký. Chức năng Android native yêu cầu APK mới.</p></details>
+      <details><summary>↻ CẬP NHẬT OTA</summary><p class="hint" id="otaMessage">Chưa kiểm tra</p><p class="hint" id="otaVersion">Giao diện 7.0.0</p><div class="settings-buttons"><button id="checkOta" class="btn outline" type="button">KIỂM TRA</button><button id="installOta" class="btn blue" disabled type="button">CẬP NHẬT</button><button id="rollback" class="btn outline" hidden type="button">QUAY LẠI</button></div><p class="hint">OTA chỉ cập nhật HTML/CSS/JS có chữ ký. Chức năng Android native yêu cầu APK mới.</p></details>
       <details><summary>🛠 NÂNG CAO · GIỚI HẠN THÔNG SỐ</summary><p class="hint">Đổi MIN, MAX, STEP và DEFAULT cho từng thông số. Giới hạn an toàn của Android vẫn được bảo vệ.</p><div id="advancedNumbers"></div><button id="resetLimits" class="btn outline" type="button">KHÔI PHỤC TOÀN BỘ GIỚI HẠN MẶC ĐỊNH</button></details>
       <p class="hint">Tất cả cài đặt lưu trong Android. Không cần bấm Lưu. Màn hình chính OneView không cuộn.</p>
     </div>

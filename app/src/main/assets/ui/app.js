@@ -32,8 +32,91 @@
   let pendingConfirm = null;
   const bars = [];
   const levels = Array(30).fill(0);
+  const waveStyles = [
+    {key:'bars',name:'Cột đứng',description:'Đơn giản, rõ mức âm'},
+    {key:'mirror',name:'Cột đối xứng',description:'Cân đối như máy ghi âm'},
+    {key:'line',name:'Đường sóng mềm',description:'Nét liền, chuyển động mượt'},
+    {key:'dots',name:'Chấm nhịp',description:'Hiện đại, gọn mắt'}
+  ];
+  let activeWaveStyle = 'mirror';
   for (let i=0;i<30;i++) { const el=document.createElement('i'); el.className='bar'; $('waveBars').append(el); bars.push(el); }
   function cap(x,lo,hi){return Math.max(lo,Math.min(hi,x));}
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const previewLevels = [8,16,32,57,36,67,89,61,45,28,53,76,96,55,37,66,46,25,14,43,72,38,25,9];
+  function wavePath(values, width, height){
+    const step=width/(values.length-1);
+    let line=`M0,${(height-values[0]*height/100).toFixed(2)}`;
+    for(let i=0;i<values.length-1;i++){
+      const x=(i*step).toFixed(2), y=(height-values[i]*height/100).toFixed(2);
+      const mx=((i+.5)*step).toFixed(2);
+      const my=(height-(values[i]+values[i+1])*height/200).toFixed(2);
+      line+=` Q${x},${y} ${mx},${my}`;
+    }
+    line+=` L${width},${(height-values[values.length-1]*height/100).toFixed(2)}`;
+    return {line,area:line+` L${width},${height} L0,${height} Z`};
+  }
+  function svgElement(type,attrs){
+    const item=document.createElementNS(svgNS,type);
+    for(const [k,v] of Object.entries(attrs))item.setAttribute(k,String(v));
+    return item;
+  }
+  function renderStylePreviews(){
+    const picker=$('waveStylePicker');
+    for(const style of waveStyles){
+      const label=document.createElement('label');label.className='wave-style-option';
+      const top=document.createElement('span');top.className='wave-style-top';
+      const title=document.createElement('span');title.textContent=style.name;
+      const input=document.createElement('input');input.type='radio';input.name='waveStyle';input.value=style.key;
+      top.append(title,input);
+      const svg=svgElement('svg',{viewBox:'0 0 180 44',preserveAspectRatio:'none','aria-hidden':'true'});
+      if(style.key==='line'){
+        const path=wavePath(previewLevels,180,44);
+        svg.append(svgElement('path',{d:path.area,fill:'#2bcb9a',opacity:'.22'}),
+          svgElement('path',{d:path.line,stroke:'#3aebc1','stroke-width':2,fill:'none'}));
+      }else{
+        const column=180/previewLevels.length;
+        previewLevels.forEach((value,i)=>{
+          const h=Math.max(3,value*.4),x=i*column+column*.17;
+          if(style.key==='dots'){
+            for(let y=44-3;y>44-h;y-=6)
+              svg.append(svgElement('circle',{cx:x+column*.33,cy:y,r:1.7,fill:'#3aebc1'}));
+          }else svg.append(svgElement('rect',{x,y:style.key==='mirror'?22-h/2:44-h,width:column*.65,height:h,rx:1.5,fill:'#3aebc1'}));
+        });
+      }
+      const description=document.createElement('span');description.className='wave-style-description';description.textContent=style.description;
+      label.append(top,svg,description);picker.append(label);
+      input.onchange=()=>{
+        if(!input.checked)return;
+        data.waveStyle=style.key;
+        save({waveStyle:style.key});
+        applyWaveStyle(style.key);
+      };
+    }
+  }
+  function applyWaveStyle(choice){
+    activeWaveStyle=waveStyles.some(s=>s.key===choice)?choice:'mirror';
+    $('waveform').dataset.style=activeWaveStyle;
+    for(const input of document.querySelectorAll('input[name="waveStyle"]')){
+      input.checked=input.value===activeWaveStyle;
+      input.closest('.wave-style-option').classList.toggle('selected',input.checked);
+    }
+    renderWaveform();
+    refreshThreshold(current?.threshold??data.threshold??-38);
+  }
+  function renderWaveform(){
+    if(activeWaveStyle==='line'){
+      const path=wavePath(levels.map(v=>cap(Number(v)||0,0,100)),300,100);
+      $('waveLine').setAttribute('d',path.line);
+      $('waveArea').setAttribute('d',path.area);
+    }else{
+      bars.forEach((bar,i)=>{
+        const v=cap(Number(levels[i])||0,0,100);
+        bar.style.height=Math.max(activeWaveStyle==='dots'?3:4,v)+'%';
+        bar.classList.toggle('hot',v>75);
+      });
+    }
+  }
+  renderStylePreviews();
   const rule = spec => limits[spec.key] || {min:spec.min,max:spec.max,step:spec.step,default:spec.default};
   function presentNumber(spec) {
     const r=rule(spec);
@@ -113,6 +196,8 @@
     for(const spec of specs) data[spec.key]=current[spec.key]??spec.default;
     try { limits=JSON.parse(current.numericLimits||'{}')||{}; }catch(e){limits={};}
     data.theme=current.theme||'system';
+    data.waveStyle=current.waveStyle||data.waveStyle||'mirror';
+    applyWaveStyle(data.waveStyle);
     specs.forEach(s=>document.querySelector(`[data-key="${s.key}"]`).updateViews());
     $('theme').value=data.theme;
     $('backupRaw').checked=current.backupRaw!==false;
@@ -164,7 +249,8 @@
     setText('thresholdValue',t+' dBFS');
     // Recorder uses -60..0 dBFS for its level scale; line and bars share it.
     const height=cap((t+60)/60*100,3,97);
-    $('thresholdLine').style.top=(100-height)+'%';
+    $('thresholdLine').style.top=(activeWaveStyle==='mirror'?(100-height)/2:100-height)+'%';
+    $('thresholdMirrorLine').style.top=((100+height)/2)+'%';
   }
   $('start').onclick=()=>send('start');
   $('pause').onclick=()=>{
@@ -183,7 +269,7 @@
       const d=JSON.parse(window.Orbic.snapshot());current=d;
       if(!settingsOpened && Object.keys(data).length===0){
         for(const spec of specs)data[spec.key]=d[spec.key]??spec.default;
-        data.theme=d.theme||'system';applyTheme();
+        data.theme=d.theme||'system';data.waveStyle=d.waveStyle||'mirror';applyTheme();applyWaveStyle(data.waveStyle);
       }
       const playing=d.musicStatus!=='idle', changing=!!d.pendingMusic||!!d.pendingResume;
       const fading=d.musicStatus==='fadingPause'||d.musicStatus==='fadingStop';
@@ -220,15 +306,16 @@
       setText('settingsFolder',d.folder||'Music/OrbicRecorder');
       setText('error',d.error||'');$('error').hidden=!d.error;
       if(d.error) setText('capture','⚠ '+d.error);
-      setText('otaVersion','Giao diện '+(d.otaVersion||'6.0.0'));setText('otaMessage',d.otaMessage||'Chưa kiểm tra');
+      setText('otaVersion','Giao diện '+(d.otaVersion||'7.0.0'));setText('otaMessage',d.otaMessage||'Chưa kiểm tra');
       $('installOta').disabled=!d.otaAvailable||d.otaStatus!=='available'||d.running||d.saving||playing||changing;
       $('rollback').hidden=!d.canRollback;
       levels.shift();levels.push(d.running&&!d.paused&&!d.musicAudible&&!changing&&!d.musicSuspended?cap(Number(d.level||0),0,100):0);
-      bars.forEach((bar,i)=>{let v=levels[i];bar.style.height=Math.max(3,v)+'%';bar.classList.toggle('hot',v>75);});
+      renderWaveform();
       if(!settingsOpened) data.threshold=d.threshold??data.threshold;
       refreshThreshold(d.threshold??-38);
       if(!settingsOpened){
         for(const key of ['uiFont','uiOpacity','waveHeight','theme']) data[key]=d[key]??data[key];
+        if((d.waveStyle||'mirror')!==activeWaveStyle)applyWaveStyle(d.waveStyle||'mirror');
         applyTheme();
       }
     }catch(e){setText('error','MẤT KẾT NỐI ANDROID');$('error').hidden=false;}
