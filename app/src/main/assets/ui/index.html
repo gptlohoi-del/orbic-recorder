@@ -41,15 +41,23 @@
   <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialogTitle">
     <header class="dialog-header"><h2 id="dialogTitle">⚙ CÀI ĐẶT</h2><button class="btn outline" id="closeSettings" type="button">✕ THOÁT</button></header>
     <div class="dialog-scroll" id="settingsScroll">
-      <p class="hint">Mỗi thay đổi được tự lưu. Ngưỡng phát hiện có tác dụng ngay; các thông số lọc khác áp dụng cho phiên ghi tiếp theo. DỪNG &amp; LƯU sẽ kết thúc phiên ghi, không dừng nhạc.</p>
+      <p class="hint">Mỗi thay đổi được tự lưu. Ngưỡng phát hiện và thông số chống quá tải áp dụng trong khoảng 100 ms khi micro đang hoạt động; các thông số lọc khác áp dụng cho phiên ghi tiếp theo. DỪNG &amp; LƯU sẽ kết thúc phiên ghi, không dừng nhạc.</p>
       <details open><summary>♫ PHÁT NHẠC</summary><div id="musicNumbers" class="numeric-list"></div><p class="hint">PAUSE/STOP nhạc sẽ tiếp tục phát và giảm âm về 0 trong thời gian đã chọn (tối đa bằng phần nhạc còn lại). Khi nhạc phát micro tắt, nhưng các nút ghi âm vẫn dùng được. Nếu phiên ghi còn chạy, nhạc dừng sẽ trở lại nghe tiếng động.</p></details>
       <details open><summary>🎙 GHI ÂM</summary><div id="recNumbers" class="numeric-list"></div>
         <label class="checkline">Lưu WAV gốc (kể cả khoảng lặng) <input id="backupRaw" type="checkbox"></label>
         <label class="selectline">Chia file mỗi <select id="splitMinutes"><option value="1">1 phút</option><option value="5">5 phút</option><option value="10">10 phút</option><option value="15">15 phút</option><option value="30">30 phút</option><option value="60">60 phút</option></select></label>
       </details>
+      <details open><summary>🛡 CHỐNG QUÁ TẢI ÂM THANH</summary>
+        <label class="checkline">AGC tự động của Android (nếu thiết bị hỗ trợ) <input id="agcEnabled" type="checkbox"></label>
+        <p class="hint">Tình trạng thiết bị: <strong id="agcStatus">Chưa khởi động micro</strong></p>
+        <label class="checkline">Bật Limiter cho WAV đã lọc tiếng động <input id="limiterEnabled" type="checkbox"></label>
+        <label class="checkline">Cảnh báo khi đầu vào gần quá tải <input id="overloadWarn" type="checkbox"></label>
+        <div id="protectNumbers" class="numeric-list"></div>
+        <p class="hint">AGC tùy điện thoại. Limiter chỉ giảm tín hiệu đã thu được, không thể sửa méo tiếng đã xảy ra ở micro hoặc mạch thu. WAV gốc dự phòng giữ dữ liệu trước Limiter phần mềm (có thể vẫn bị rè).</p>
+      </details>
       <details><summary>🎨 GIAO DIỆN</summary><div id="viewNumbers" class="numeric-list"></div><label class="selectline">Chủ đề <select id="theme"><option value="system">Theo hệ thống</option><option value="light">Sáng</option><option value="dark">Tối</option></select></label></details>
       <details><summary>📁 LƯU TRỮ</summary><p class="hint" id="settingsFolder">Music/OrbicRecorder</p><div class="settings-buttons"><button id="playLast" class="btn outline" type="button">▶ NGHE BẢN GHI GẦN NHẤT</button></div><div class="settings-buttons"><button id="chooseFolder" class="btn outline" type="button">CHỌN THƯ MỤC WAV</button><button id="resetFolder" class="btn outline" type="button">MẶC ĐỊNH</button></div></details>
-      <details><summary>↻ CẬP NHẬT OTA</summary><p class="hint" id="otaMessage">Chưa kiểm tra</p><p class="hint" id="otaVersion">Giao diện 4.0.0</p><div class="settings-buttons"><button id="checkOta" class="btn outline" type="button">KIỂM TRA</button><button id="installOta" class="btn blue" disabled type="button">CẬP NHẬT</button><button id="rollback" class="btn outline" hidden type="button">QUAY LẠI</button></div><p class="hint">OTA chỉ cập nhật HTML/CSS/JS có chữ ký. Chức năng Android native yêu cầu APK mới.</p></details>
+      <details><summary>↻ CẬP NHẬT OTA</summary><p class="hint" id="otaMessage">Chưa kiểm tra</p><p class="hint" id="otaVersion">Giao diện 5.0.0</p><div class="settings-buttons"><button id="checkOta" class="btn outline" type="button">KIỂM TRA</button><button id="installOta" class="btn blue" disabled type="button">CẬP NHẬT</button><button id="rollback" class="btn outline" hidden type="button">QUAY LẠI</button></div><p class="hint">OTA chỉ cập nhật HTML/CSS/JS có chữ ký. Chức năng Android native yêu cầu APK mới.</p></details>
       <details><summary>🛠 NÂNG CAO · GIỚI HẠN THÔNG SỐ</summary><p class="hint">Đổi MIN, MAX, STEP và DEFAULT cho từng thông số. Giới hạn an toàn của Android vẫn được bảo vệ.</p><div id="advancedNumbers"></div><button id="resetLimits" class="btn outline" type="button">KHÔI PHỤC TOÀN BỘ GIỚI HẠN MẶC ĐỊNH</button></details>
       <p class="hint">Tất cả cài đặt lưu trong Android. Không cần bấm Lưu. Màn hình chính OneView không cuộn.</p>
     </div>

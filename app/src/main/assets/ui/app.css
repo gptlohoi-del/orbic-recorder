@@ -1,4 +1,4 @@
-/* ORBIC v8 – fixed OneView. Main screen never scrolls; Settings scroll independently. */
+/* ORBIC v9 – fixed OneView. Main screen never scrolls; Settings scroll independently. */
 :root{font-family:Roboto,"Noto Sans",system-ui,sans-serif;color-scheme:light;--page:#f3f7f6;--panel:#fff;--ink:#183341;--muted:#657b86;--border:#dbe6e9;--shade:#eaf2f4;--green:#117958;--blue:#277295;--red:#ae3b4c;--yellow:#a27421;--font-scale:1;--panel-opacity:1;--wave-height:92px}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--page:#101c25;--panel:#1a2c37;--ink:#e2f2f4;--muted:#aabdc8;--border:#34505d;--shade:#243c48;--green:#0d7c61;--blue:#265f83;--red:#a34150;--yellow:#8b6b29}}
 :root[data-theme="dark"]{color-scheme:dark;--page:#101c25;--panel:#1a2c37;--ink:#e2f2f4;--muted:#aabdc8;--border:#34505d;--shade:#243c48;--green:#0d7c61;--blue:#265f83;--red:#a34150;--yellow:#8b6b29}

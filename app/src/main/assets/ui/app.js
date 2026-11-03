@@ -17,6 +17,10 @@
     {key:'pre',label:'Giữ âm thanh trước tiếng động',unit:'ms',default:1000,min:0,max:5000,step:100,hardMin:0,hardMax:10000,group:'rec'},
     {key:'tail',label:'Giữ âm thanh sau tiếng động',unit:'ms',default:1000,min:100,max:5000,step:100,hardMin:100,hardMax:10000,group:'rec'},
     {key:'warnSeconds',label:'Cảnh báo khi không có tín hiệu',unit:'giây',default:9999,min:10,max:9999,step:1,hardMin:5,hardMax:9999,group:'rec'},
+    {key:'limitDb',label:'Ngưỡng Limiter (mức âm đầu ra)',unit:'dBFS',default:-6,min:-18,max:-1,step:1,hardMin:-30,hardMax:-1,group:'protect'},
+    {key:'attackMs',label:'Thời gian giảm mức âm (Attack)',unit:'ms',default:10,min:1,max:100,step:1,hardMin:1,hardMax:250,group:'protect'},
+    {key:'releaseMs',label:'Thời gian phục hồi mức âm (Release)',unit:'ms',default:500,min:50,max:2000,step:50,hardMin:20,hardMax:5000,group:'protect'},
+    {key:'overloadDb',label:'Mức cảnh báo đầu vào gần quá tải',unit:'dBFS',default:-1,min:-12,max:-1,step:1,hardMin:-12,hardMax:-1,group:'protect'},
     {key:'uiFont',label:'Tỷ lệ kích thước chữ',unit:'%',default:100,min:75,max:160,step:5,group:'view'},
     {key:'uiOpacity',label:'Độ đậm nền các khung',unit:'%',default:100,min:30,max:100,step:5,group:'view'},
     {key:'waveHeight',label:'Độ cao vùng sóng âm',unit:'px',default:92,min:45,max:135,step:5,hardMin:30,hardMax:180,group:'view'}
@@ -112,6 +116,8 @@
     specs.forEach(s=>document.querySelector(`[data-key="${s.key}"]`).updateViews());
     $('theme').value=data.theme;
     $('backupRaw').checked=current.backupRaw!==false;
+    for(const key of ['agcEnabled','limiterEnabled','overloadWarn']) $(key).checked=current[key]!==false;
+    setText('agcStatus',current.agcStatus||'Chưa khởi động micro');
     $('splitMinutes').value=String(current.splitMinutes||15);
     renderAdvanced();settingsOpened=true;$('modal').hidden=false;
   }
@@ -121,6 +127,9 @@
   $('closeSettings').onclick=$('closeBottom').onclick=$('modalBackdrop').onclick=closeSettings;
   $('theme').onchange=()=>{data.theme=$('theme').value;save({theme:data.theme});applyTheme();};
   $('backupRaw').onchange=()=>save({backupRaw:$('backupRaw').checked});
+  for (const key of ['agcEnabled','limiterEnabled','overloadWarn']) {
+    $(key).onchange=()=>save({[key]:$(key).checked});
+  }
   $('splitMinutes').onchange=()=>save({splitMinutes:Number($('splitMinutes').value)});
   $('resetLimits').onclick=()=>{
     limits={};save({numericLimits:{}});
@@ -197,6 +206,7 @@
       $('pause').disabled=stopped||!!d.saving||!!d.starting;
       $('pause').textContent=d.paused?'▶ TIẾP TỤC':'Ⅱ PAUSE';
       $('stop').disabled=stopped||!!d.saving||!!d.starting;
+      setText('agcStatus',d.agcStatus||'Chưa khởi động micro');
       setText('capture',d.capture||'Sẵn sàng');setText('recordState',d.paused?'PAUSE':d.running?'Đã START':'Sẵn sàng');
       setText('db',(d.db||'—')+' dBFS');
       setText('elapsed',fmt(d.elapsedMs));setText('kept',fmt(d.keptMs));setText('segments',d.segments||0);
@@ -206,7 +216,7 @@
       setText('settingsFolder',d.folder||'Music/OrbicRecorder');
       setText('error',d.error||'');$('error').hidden=!d.error;
       if(d.error) setText('capture','⚠ '+d.error);
-      setText('otaVersion','Giao diện '+(d.otaVersion||'4.0.0'));setText('otaMessage',d.otaMessage||'Chưa kiểm tra');
+      setText('otaVersion','Giao diện '+(d.otaVersion||'5.0.0'));setText('otaMessage',d.otaMessage||'Chưa kiểm tra');
       $('installOta').disabled=!d.otaAvailable||d.otaStatus!=='available'||d.running||d.saving||playing||changing;
       $('rollback').hidden=!d.canRollback;
       levels.shift();levels.push(d.running&&!d.paused&&!d.musicAudible&&!changing&&!d.musicSuspended?cap(Number(d.level||0),0,100):0);

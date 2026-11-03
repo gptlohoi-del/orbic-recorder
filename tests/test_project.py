@@ -38,8 +38,8 @@ ET.parse(manifest)
 man = manifest.read_text(encoding='utf-8')
 assert 'screenOrientation="fullSensor"' in man
 assert 'configChanges="orientation|screenSize|smallestScreenSize|keyboardHidden"' in man
-assert 'NATIVE_API = 4' in ota and 'BUILTIN_VERSION = "4.0.0"' in ota
-assert 'NATIVE_API = 4' in script
+assert 'NATIVE_API = 5' in ota and 'BUILTIN_VERSION = "5.0.0"' in ota
+assert 'NATIVE_API = 5' in script
 assert 'case "start": startRecording(); break;' in activity
 assert 'music.isBlockingMic() || pendingMusic || pendingResume' in activity
 assert 'case "musicPause": music.requestPause' in activity
@@ -67,4 +67,18 @@ assert 'takePersistableUriPermission' in activity
 
 subprocess.run(['node', '--check', str(ui / 'app.js')], check=True)
 subprocess.run(['python3', '-m', 'py_compile', str(root / 'scripts/publish_ota.py')], check=True)
-print('PASS: v8 source, fade pause/stop, OneView, threshold, reverse portrait, OTA API, JS syntax')
+assert 'AutomaticGainControl.create' in service
+assert 'dynamics.processInPlace(block)' in service
+assert 'double amp = rms(frame);' in service  # VAD uses pre-limiter signal
+assert 'current.raw.write(block)' in service
+assert service.index('current.raw.write(block)') < service.index('dynamics.processInPlace(block)')
+assert 'getBoolean("limiterEnabled", true)' in service
+assert 'getBoolean("agcEnabled", true)' in service
+assert 'getBoolean("overloadWarn", true)' in service
+assert all(f'"{key}"' in activity for key in
+           ['agcEnabled','limiterEnabled','overloadWarn','limitDb','attackMs','releaseMs','overloadDb'])
+assert all(f"key:'{key}'" in js for key in
+           ['limitDb','attackMs','releaseMs','overloadDb'])
+assert all(f'id="{key}"' in html for key in
+           ['agcEnabled','limiterEnabled','overloadWarn','agcStatus','protectNumbers'])
+print('PASS: v9 source, AGC/limiter, settings, OneView, OTA API, JS syntax')

@@ -1,4 +1,4 @@
-# ORBIC RECORDER v7 – APK Release ký cố định (tùy chọn)
+# ORBIC RECORDER v9 – APK Release ký cố định (tùy chọn)
 
 **Không bắt buộc.** Để tạo APK không có Release Key, dùng workflow **Tạo APK Orbic Recorder (không cần Release Key)** trong GitHub Actions và xem `README.md`.
 
@@ -27,8 +27,8 @@ Thiết lập 4 Secrets trong **Settings → Secrets and variables → Actions**
 
 Giữ riêng `OTA_SIGNING_KEY_B64` nếu đang sử dụng OTA.
 
-## Tạo APK Release v7
+## Tạo APK Release v9
 
-Vào GitHub → **Actions → Optional signed Release APK (cần Release Key) → Run workflow**. Khi thành công, tải artifact tên `Recorder-7.0.<run_number>`, chứa APK `Recorder-7.0.<run_number>.apk`. Kiểm tra bước **Verify APK signature** trong log.
+Vào GitHub → **Actions → Optional signed Release APK (cần Release Key) → Run workflow**. Khi thành công, tải artifact tên `Recorder-9.0.<run_number>`, chứa APK `Recorder-9.0.<run_number>.apk`. Kiểm tra bước **Verify APK signature** trong log.
 
 **Quan trọng:** APK Release **không cài đè** APK Debug có chữ ký khác. Sao lưu WAV và cài đặt trước khi gỡ bản debug. OTA chỉ cập nhật `index.html`, `app.js`, `app.css`, không cập nhật Java native. Duy trì khóa APK ổn định cho mọi bản native về sau.

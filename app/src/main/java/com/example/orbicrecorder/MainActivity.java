@@ -29,7 +29,7 @@ import java.util.Collections;
 
 /** Native recorder from v4 + OTA-updateable local HTML/CSS/JS user interface. */
 public class MainActivity extends Activity {
-    private static final String NATIVE_LABEL = "ORBIC RECORDER v8";
+    private static final String NATIVE_LABEL = "ORBIC RECORDER v9";
     private static final String LOCAL_ORIGIN = "https://appassets.androidplatform.net";
     private static final int REQUEST_MIC = 101;
     private static final int REQUEST_FOLDER = 102;
@@ -396,6 +396,16 @@ public class MainActivity extends Activity {
                 data.put("pre", cfg.getInt("pre", 1000));
                 data.put("tail", cfg.getInt("tail", 1000));
                 data.put("threshold", cfg.getInt("threshold", -38));
+                data.put("agcEnabled", cfg.getBoolean("agcEnabled", true));
+                data.put("limiterEnabled", cfg.getBoolean("limiterEnabled", true));
+                data.put("overloadWarn", cfg.getBoolean("overloadWarn", true));
+                data.put("limitDb", cfg.getInt("limitDb", -6));
+                data.put("attackMs", cfg.getInt("attackMs", 10));
+                data.put("releaseMs", cfg.getInt("releaseMs", 500));
+                data.put("overloadDb", cfg.getInt("overloadDb", -1));
+                data.put("agcStatus", p.getString("agcStatus", "Chưa khởi động micro"));
+                data.put("overload", p.getBoolean("overload", false));
+                data.put("peakDb", p.getString("peakDb", "—"));
                 data.put("fadeIn", cfg.getInt("fadeIn", 3000));
                 data.put("fadeOut", cfg.getInt("fadeOut", 5000));
                 data.put("pauseStopFade", cfg.getInt("pauseStopFade", 2000));
@@ -481,9 +491,10 @@ public class MainActivity extends Activity {
             try {
                 JSONObject v = new JSONObject(json);
                 String[] numeric = { "threshold", "minSpeech", "pre", "tail", "warnSeconds",
-                        "fadeIn", "fadeOut", "pauseStopFade", "musicVolume", "listenDelay", "uiFont", "uiOpacity", "waveHeight" };
-                int[] low = { -80, 20, 0, 100, 5, 0, 0, 0, 0, 0, 75, 30, 30 };
-                int[] high = { -5, 2000, 10000, 10000, 9999, 30000, 30000, 15000, 100, 5000, 160, 100, 180 };
+                        "fadeIn", "fadeOut", "pauseStopFade", "musicVolume", "listenDelay", "uiFont", "uiOpacity", "waveHeight",
+                        "limitDb", "attackMs", "releaseMs", "overloadDb" };
+                int[] low = { -80, 20, 0, 100, 5, 0, 0, 0, 0, 0, 75, 30, 30, -30, 1, 20, -12 };
+                int[] high = { -5, 2000, 10000, 10000, 9999, 30000, 30000, 15000, 100, 5000, 160, 100, 180, -1, 250, 5000, -1 };
                 SharedPreferences.Editor edit = config().edit();
                 for (int i = 0; i < numeric.length; i++) {
                     if (v.has(numeric[i])) {
@@ -512,6 +523,9 @@ public class MainActivity extends Activity {
                     edit.putString("theme", theme);
                 }
                 if (v.has("backupRaw")) edit.putBoolean("backupRaw", v.getBoolean("backupRaw"));
+                for (String key : new String[]{"agcEnabled", "limiterEnabled", "overloadWarn"}) {
+                    if (v.has(key)) edit.putBoolean(key, v.getBoolean(key));
+                }
                 if (v.has("numericLimits")) {
                     JSONObject limits = v.getJSONObject("numericLimits");
                     if (limits.length() > numeric.length) throw new IllegalArgumentException("Quá nhiều thông số");

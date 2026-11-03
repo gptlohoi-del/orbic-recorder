@@ -11,6 +11,7 @@ import android.media.AudioDeviceInfo;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
+import android.media.audiofx.AutomaticGainControl;
 import android.os.IBinder;
 
 import java.io.IOException;
@@ -42,6 +43,9 @@ public class RecorderService extends Service {
     private volatile boolean musicHold;
     private volatile boolean saveRequested;
     private AudioRecord audio;
+    private AutomaticGainControl hardwareAgc;
+    private boolean hardwareAgcSetting;
+    private String hardwareAgcStatus = "Chưa kiểm tra";
     private Thread worker;
 
     private SharedPreferences state() { return getSharedPreferences("state", MODE_PRIVATE); }
@@ -70,7 +74,7 @@ public class RecorderService extends Service {
                 new Intent(this, RecorderService.class).setAction(paused ? "RESUME" : "PAUSE"), flags);
         return new Notification.Builder(this, CHANNEL)
                 .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-                .setContentTitle("Orbic Recorder v8 – Bản ghi an toàn")
+                .setContentTitle("Orbic Recorder v9 – Bản ghi an toàn")
                 .setContentText(stopping ? "Đang hoàn thiện và lưu WAV" : paused ? "Đang tạm dừng" : "Đang thu và lọc âm thanh")
                 .setContentIntent(PendingIntent.getActivity(this, 0,
                         new Intent(this, MainActivity.class), flags))
@@ -163,6 +167,7 @@ public class RecorderService extends Service {
             AudioDeviceInfo device = audio == null ? null : audio.getRoutedDevice();
             state().edit().putBoolean("running", true).putBoolean("saving", false)
                     .putBoolean("paused", false).putBoolean("musicSuspended", startHeld)
+                    .putBoolean("overload", false).putString("agcStatus", startHeld ? "Đợi nhạc dừng" : hardwareAgcStatus)
                     .putBoolean("starting", false).putString("error", "")
                     .putString("capture", startHeld ? "NHẠC ĐANG PHÁT – MICRO TẮT" : "ĐANG CHỜ TIẾNG ĐỘNG")
                     .putString("file", "Đang ghi phiên " + session)
@@ -205,10 +210,46 @@ public class RecorderService extends Service {
             result.release();
             throw new IOException("Không khởi tạo được AudioRecord");
         }
+        // AGC is an Android capture effect, not a software repair for clipping.
+        // Some microphone paths don't expose AGC; keep recording with limiter.
+        hardwareAgc = null;
+        hardwareAgcStatus = "Thiết bị không hỗ trợ AGC";
+        try {
+            if (AutomaticGainControl.isAvailable()) {
+                hardwareAgc = AutomaticGainControl.create(result.getAudioSessionId());
+                if (hardwareAgc != null) hardwareAgcStatus = "AGC sẵn sàng";
+            }
+        } catch (RuntimeException ignored) {
+            hardwareAgc = null;
+            hardwareAgcStatus = "AGC không khả dụng";
+        }
+        hardwareAgcSetting = !config().getBoolean("agcEnabled", true);
+        setHardwareAgc(config().getBoolean("agcEnabled", true));
         return result;
     }
 
+    private void setHardwareAgc(boolean enabled) {
+        if (hardwareAgc == null) {
+            hardwareAgcStatus = enabled ? "Thiết bị không hỗ trợ AGC" : "AGC đã tắt";
+            stateValue("agcStatus", hardwareAgcStatus);
+            return;
+        }
+        if (enabled != hardwareAgcSetting) {
+            try { hardwareAgc.setEnabled(enabled); }
+            catch (RuntimeException ignored) { /* unsupported control path */ }
+            hardwareAgcSetting = enabled;
+        }
+        try {
+            hardwareAgcStatus = hardwareAgc.getEnabled() ? "AGC hệ thống: BẬT" :
+                    enabled ? "AGC hệ thống: KHÔNG BẬT ĐƯỢC" : "AGC đã tắt";
+        } catch (RuntimeException e) { hardwareAgcStatus = "AGC không khả dụng"; }
+        stateValue("agcStatus", hardwareAgcStatus);
+    }
+
     private void releaseMicrophone() {
+        AutomaticGainControl oldAgc = hardwareAgc;
+        hardwareAgc = null;
+        if (oldAgc != null) try { oldAgc.release(); } catch (RuntimeException ignored) { }
         AudioRecord old = audio;
         audio = null;
         if (old != null) {
@@ -250,6 +291,13 @@ public class RecorderService extends Service {
         if (splitMinutes < 1 || splitMinutes > 60) splitMinutes = 15;
         long splitFrames = (long) splitMinutes * 60 * 1000 / FRAME_MS;
         boolean saveRaw = cfg.getBoolean("backupRaw", true);
+        AudioDynamics dynamics = new AudioDynamics();
+        boolean limiter = cfg.getBoolean("limiterEnabled", true);
+        boolean overloadWarn = cfg.getBoolean("overloadWarn", true);
+        int overloadThreshold = cfg.getInt("overloadDb", -1);
+        long warningUntilFrame = 0;
+        dynamics.configure(limiter, cfg.getInt("limitDb", -6),
+                cfg.getInt("attackMs", 10), cfg.getInt("releaseMs", 500));
 
         Deque<byte[]> pre = new ArrayDeque<>();
         Deque<byte[]> candidate = new ArrayDeque<>();
@@ -272,7 +320,8 @@ public class RecorderService extends Service {
                     RecordingArchive.sync(current);
                     releaseMicrophone();
                     state().edit().putBoolean("musicSuspended", true)
-                            .putInt("level", 0).putString("db", "—")
+                            .putBoolean("overload", false).putInt("level", 0).putString("db", "—")
+                            .putString("agcStatus", "Micro tắt khi phát nhạc")
                             .putString("capture", "ĐANG PHÁT NHẠC – MICRO ĐÃ TẮT").apply();
                     while (recording && musicHold) {
                         // A second PLAY may arrive before the mic reopens. Re-acknowledge
@@ -306,7 +355,7 @@ public class RecorderService extends Service {
                         wasPaused = true;
                         RecordingArchive.sync(current);
                     }
-                    stateValue("level", 0);
+                    state().edit().putInt("level", 0).putBoolean("overload", false).apply();
                     continue;
                 }
                 if (wasPaused) {
@@ -330,12 +379,32 @@ public class RecorderService extends Service {
                 }
                 byte[] block = Arrays.copyOf(frame, FRAME_SIZE);
                 elapsed++; partFrames++;
+                // Backup the captured PCM BEFORE the software limiter. This
+                // preserves original audio, including possible source clipping.
                 if (current.raw != null) {
                     current.raw.write(block);
                     current.rawBytes += block.length;
                 }
+                // VAD is based on input signal, independent of limiter output.
+                double inputPeakDb = AudioDynamics.peakDbFs(block);
+                if (elapsed % 5 == 0) {
+                    limiter = cfg.getBoolean("limiterEnabled", true);
+                    overloadWarn = cfg.getBoolean("overloadWarn", true);
+                    overloadThreshold = cfg.getInt("overloadDb", -1);
+                    dynamics.configure(limiter, cfg.getInt("limitDb", -6),
+                            cfg.getInt("attackMs", 10), cfg.getInt("releaseMs", 500));
+                    boolean desiredAgc = cfg.getBoolean("agcEnabled", true);
+                    if (desiredAgc != hardwareAgcSetting || hardwareAgc == null &&
+                            !hardwareAgcStatus.equals(desiredAgc ? "Thiết bị không hỗ trợ AGC" : "AGC đã tắt")) {
+                        setHardwareAgc(desiredAgc);
+                    }
+                }
+                if (overloadWarn && inputPeakDb >= overloadThreshold) {
+                    warningUntilFrame = elapsed + 75; // keep warning 1.5 seconds
+                }
+                dynamics.processInPlace(block);
 
-                double amp = rms(block);
+                double amp = rms(frame);
                 double db = 20 * Math.log10(Math.max(1.0e-9, amp / 32768.0));
                 // Quick threshold +/- is hot-applied while recording (<=100 ms latency).
                 if (elapsed % 5 == 0) threshold = cfg.getInt("threshold", -38);
@@ -379,11 +448,15 @@ public class RecorderService extends Service {
 
                 if (elapsed % 5 == 0) {
                     int level = (int) Math.max(0, Math.min(100, (db + 60.0) * 100.0 / 60.0));
-                    String capture = active ? "● ĐANG GIỮ ÂM THANH" : silence > warnFrames ?
+                    boolean overload = overloadWarn && elapsed <= warningUntilFrame;
+                    String capture = overload ? "⚠ TÍN HIỆU GẦN 0 dBFS – KIỂM TRA MICRO" :
+                            active ? "● ĐANG GIỮ ÂM THANH" : silence > warnFrames ?
                             "! KHÔNG CÓ TIẾNG NÓI – KIỂM TRA NGUỒN" : "ĐANG LỌC KHOẢNG LẶNG";
                     state().edit().putLong("elapsedMs", elapsed * FRAME_MS)
                             .putLong("keptMs", kept * 1000L / RecordingArchive.BYTES_PER_SEC)
                             .putInt("segments", segments).putInt("level", level)
+                            .putBoolean("overload", overload)
+                            .putString("peakDb", String.format(Locale.US, "%.1f", inputPeakDb))
                             .putString("db", String.format(Locale.US, "%.1f", Math.max(-120.0, db)))
                             .putString("capture", capture).putInt("part", part).apply();
                 }
@@ -412,7 +485,8 @@ public class RecorderService extends Service {
             recording = false;
             paused = false;
             state().edit().putBoolean("running", false).putBoolean("paused", false)
-                    .putBoolean("saving", true).putBoolean("musicSuspended", false).putInt("level", 0)
+                    .putBoolean("saving", true).putBoolean("musicSuspended", false)
+                    .putBoolean("overload", false).putInt("level", 0)
                     .putLong("elapsedMs", elapsed * FRAME_MS)
                     .putLong("keptMs", kept * 1000L / RecordingArchive.BYTES_PER_SEC)
                     .putInt("segments", segments).putString("capture", "ĐANG LƯU FILE").apply();
