@@ -206,6 +206,10 @@
       $('pause').disabled=stopped||!!d.saving||!!d.starting;
       $('pause').textContent=d.paused?'▶ TIẾP TỤC':'Ⅱ PAUSE';
       $('stop').disabled=stopped||!!d.saving||!!d.starting;
+      // Native APK v9.1+ provides a device-level AGC availability flag even before START.
+      setText('agcSupport',typeof d.agcSupported==='boolean'
+        ? (d.agcSupported?'CÓ HỖ TRỢ (API Android)':'KHÔNG HỖ TRỢ (API Android)')
+        : 'CẦN CẬP NHẬT APK ĐỂ KIỂM TRA');
       setText('agcStatus',d.agcStatus||'Chưa khởi động micro');
       setText('capture',d.capture||'Sẵn sàng');setText('recordState',d.paused?'PAUSE':d.running?'Đã START':'Sẵn sàng');
       setText('db',(d.db||'—')+' dBFS');
@@ -216,7 +220,7 @@
       setText('settingsFolder',d.folder||'Music/OrbicRecorder');
       setText('error',d.error||'');$('error').hidden=!d.error;
       if(d.error) setText('capture','⚠ '+d.error);
-      setText('otaVersion','Giao diện '+(d.otaVersion||'5.0.0'));setText('otaMessage',d.otaMessage||'Chưa kiểm tra');
+      setText('otaVersion','Giao diện '+(d.otaVersion||'6.0.0'));setText('otaMessage',d.otaMessage||'Chưa kiểm tra');
       $('installOta').disabled=!d.otaAvailable||d.otaStatus!=='available'||d.running||d.saving||playing||changing;
       $('rollback').hidden=!d.canRollback;
       levels.shift();levels.push(d.running&&!d.paused&&!d.musicAudible&&!changing&&!d.musicSuspended?cap(Number(d.level||0),0,100):0);

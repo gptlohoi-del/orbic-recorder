@@ -1,6 +1,7 @@
 package com.example.orbicrecorder;
 
 import android.Manifest;
+import android.media.audiofx.AutomaticGainControl;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
@@ -29,7 +30,7 @@ import java.util.Collections;
 
 /** Native recorder from v4 + OTA-updateable local HTML/CSS/JS user interface. */
 public class MainActivity extends Activity {
-    private static final String NATIVE_LABEL = "ORBIC RECORDER v9";
+    private static final String NATIVE_LABEL = "ORBIC RECORDER v9.1";
     private static final String LOCAL_ORIGIN = "https://appassets.androidplatform.net";
     private static final int REQUEST_MIC = 101;
     private static final int REQUEST_FOLDER = 102;
@@ -47,6 +48,7 @@ public class MainActivity extends Activity {
     // A cancelled/older song must never restart listening after DỪNG & LƯU.
     private long listeningRestoreTicket;
     private boolean pendingMusic;
+    private boolean agcSupported;
     private boolean pendingResume;
     private Uri switchMusicUri;
     private String switchMusicName;
@@ -59,6 +61,9 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // API capability can be checked before opening the microphone or requesting permission.
+        // True means the Android AGC effect is exposed, not that every input path can use it.
+        agcSupported = detectAgcSupport();
         music = new MusicPlayer(this, new MusicPlayer.Listener() {
             @Override public void ended() { onMusicEnded(); }
             @Override public void paused() { onMusicPaused(); }
@@ -78,6 +83,14 @@ public class MainActivity extends Activity {
         buildWebView();
         // Check quietly on app opening; recording itself does not need Internet.
         ota.check();
+    }
+
+    private static boolean detectAgcSupport() {
+        try {
+            return AutomaticGainControl.isAvailable();
+        } catch (RuntimeException | LinkageError ignored) {
+            return false;
+        }
     }
 
     private static boolean isLocal(Uri uri) {
@@ -397,13 +410,17 @@ public class MainActivity extends Activity {
                 data.put("tail", cfg.getInt("tail", 1000));
                 data.put("threshold", cfg.getInt("threshold", -38));
                 data.put("agcEnabled", cfg.getBoolean("agcEnabled", true));
+                data.put("agcSupported", agcSupported);
                 data.put("limiterEnabled", cfg.getBoolean("limiterEnabled", true));
                 data.put("overloadWarn", cfg.getBoolean("overloadWarn", true));
                 data.put("limitDb", cfg.getInt("limitDb", -6));
                 data.put("attackMs", cfg.getInt("attackMs", 10));
                 data.put("releaseMs", cfg.getInt("releaseMs", 500));
                 data.put("overloadDb", cfg.getInt("overloadDb", -1));
-                data.put("agcStatus", p.getString("agcStatus", "Chưa khởi động micro"));
+                // Persisted capture status may be stale after STOP; report only current session status.
+                data.put("agcStatus", p.getBoolean("running", false) || p.getBoolean("starting", false)
+                        ? p.getString("agcStatus", "Chưa khởi động micro")
+                        : "Chưa khởi động micro");
                 data.put("overload", p.getBoolean("overload", false));
                 data.put("peakDb", p.getString("peakDb", "—"));
                 data.put("fadeIn", cfg.getInt("fadeIn", 3000));

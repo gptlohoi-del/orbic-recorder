@@ -1,4 +1,4 @@
-# ORBIC RECORDER v9 — Full Repo Android APK + OTA + AGC/Limiter
+# ORBIC RECORDER v9.1 — Full Repo Android APK + OTA + AGC/Limiter
 
 Đây là mã nguồn đầy đủ Java/Android + giao diện HTML/CSS/JavaScript ngoại tuyến, phát triển từ Orbic Recorder v8 (bản đã sửa tăng âm khi TIẾP). **Không phải file APK đã biên dịch.** Android SDK/Gradle sẽ được GitHub Actions dùng để tạo APK.
 
@@ -40,14 +40,14 @@ Các thông số số học có **thanh trượt, −/+, ô nhập trực tiếp
 
 1. Giải nén **nội dung** thư mục `orbic-recorder-main/` lên thư mục gốc repository `gptlohoi-del/orbic-recorder` (địa chỉ OTA đang cấu hình sẵn). Giữ lại `ota/latest.json` và các file cũ trong `ota/bundles/` trên GitHub; không xóa lịch sử phát hành OTA.
 2. Commit lên nhánh `main`. Vào **Actions → Tạo APK Orbic Recorder (không cần Release Key) → Run workflow**. Workflow cũng chạy sau push mã nguồn.
-3. Tải artifact **`ORBIC-RECORDER-v9-debug`**, giải nén và cài APK trên Android.
+3. Tải artifact **`ORBIC-RECORDER-v9.1-debug`**, giải nén và cài APK trên Android.
 
-**Phải tạo APK v9 mới lần này** vì mã Java/Android Manifest đã đổi; chạy OTA riêng không cập nhật được các hàm native. APK debug được ký tự động, nhưng khóa ký **có thể thay đổi giữa các lần GitHub build**, khiến không thể cài đè bản debug trước. Nếu dự định dùng lâu dài, nên tạo và lưu an toàn khóa ký Android ổn định, rồi sử dụng workflow build-release có sẵn.
+**Phải tạo APK v9.1 mới lần này** vì mã Java đã đổi; chạy OTA riêng không cập nhật được các hàm native. APK debug được ký tự động, nhưng khóa ký **có thể thay đổi giữa các lần GitHub build**, khiến không thể cài đè bản debug trước. Nếu dự định dùng lâu dài, nên tạo và lưu an toàn khóa ký Android ổn định, rồi sử dụng workflow build-release có sẵn.
 
 ## OTA giao diện
 
-- OTA **chỉ cập nhật giao diện `index.html`, `app.css`, `app.js`**, không thay đổi Java, quyền Android hay file APK. `OtaManager` giới hạn và kiểm tra chữ ký RSA trước khi cài. **v9 dùng `nativeApi=5`, giao diện nhúng `5.0.0`**. OTA cũ `nativeApi=4` không tương thích với v9, không được ép cài.
-- Sau khi cài APK v9, chỉnh các file UI trong repo, Commit, vào **Actions → Publish Orbic Recorder OTA → Run workflow**. Script tự tăng số phiên bản: `5.0.1` → `5.0.2` … (hoặc cao hơn nếu GitHub đã có bản mới).
+- OTA **chỉ cập nhật giao diện `index.html`, `app.css`, `app.js`**, không thay đổi Java, quyền Android hay file APK. `OtaManager` giới hạn và kiểm tra chữ ký RSA trước khi cài. **v9.1 dùng `nativeApi=6`, giao diện nhúng `6.0.0`**. OTA cũ `nativeApi=5` không tương thích với v9.1, không được ép cài.
+- Sau khi cài APK v9.1, chỉnh các file UI trong repo, Commit, vào **Actions → Publish Orbic Recorder OTA → Run workflow**. Script tự tăng số phiên bản: `6.0.1` → `6.0.2` … (hoặc cao hơn nếu GitHub đã có bản mới).
 - GitHub cần Secret **`OTA_SIGNING_KEY_B64`** của RSA private key khớp public key trong `OtaManager.java`. Secret này **khác** khóa ký APK. Nếu không có hoặc không khớp, không thể phát hành OTA hợp lệ; giữ an toàn private key. URL OTA hiện mặc định cho repo `gptlohoi-del/orbic-recorder`; khi đổi repo phải sửa cả URL Java và OWNER/REPO trong `scripts/publish_ota.py` rồi build APK mới.
 
 ## File chính
@@ -62,12 +62,19 @@ Các thông số số học có **thanh trượt, −/+, ô nhập trực tiếp
 | `app/src/main/java/com/example/orbicrecorder/MainActivity.java` | WebView bridge, micro handoff, chọn nhạc, cập nhật cấu hình |
 | `app/src/main/java/com/example/orbicrecorder/RecorderService.java` | VAD, AGC Android, Limiter, cảnh báo peak, WAV, tạm nhường mic |
 | `app/src/main/AndroidManifest.xml` | Xoay 180°, quyền và service |
-| `app/src/main/java/com/example/orbicrecorder/OtaManager.java` | OTA có chữ ký, nativeApi 4 |
+| `app/src/main/java/com/example/orbicrecorder/OtaManager.java` | OTA có chữ ký, nativeApi 6 |
 | `.github/workflows/build.yml` | Build APK debug trên GitHub |
 | `.github/workflows/publish-ota.yml` | Tự tăng và phát hành OTA có chữ ký |
 
 ## Kiểm thử bắt buộc trên điện thoại thật
 
-Trước khi dùng cho các bản ghi quan trọng: thử START khi đang phát bài; PAUSE/STOP nhạc khi bài còn nhiều hơn 2 giây và ít hơn 2 giây; xác nhận không có nhạc trong WAV; nhấn PAUSE ghi âm thủ công; DỪNG & LƯU giữa lúc nhạc phát; chuyển bài; xoay ngược 180°; đổi ngưỡng ± khi đang nghe và kiểm tra thay đổi ngưỡng có hiệu lực; thử OTA sau khi cài APK v9.
+Trước khi dùng cho các bản ghi quan trọng: thử START khi đang phát bài; PAUSE/STOP nhạc khi bài còn nhiều hơn 2 giây và ít hơn 2 giây; xác nhận không có nhạc trong WAV; nhấn PAUSE ghi âm thủ công; DỪNG & LƯU giữa lúc nhạc phát; chuyển bài; xoay ngược 180°; đổi ngưỡng ± khi đang nghe và kiểm tra thay đổi ngưỡng có hiệu lực; thử OTA sau khi cài APK v9.1.
 
 Mã nguồn đã được kiểm tra cú pháp JavaScript và qua các test tĩnh. **Chưa biên dịch thành APK và chưa kiểm thử audio/micro trên Android thật trong môi trường này.**
+
+
+## Kiểm tra AGC của máy ngay trong Settings (v9.1)
+
+Mở **Settings → 🛡 CHỐNG QUÁ TẢI ÂM THANH**: dòng **Hỗ trợ AGC trên điện thoại** sẽ hiển thị **CÓ HỖ TRỢ (API Android)** hoặc **KHÔNG HỖ TRỢ (API Android)** ngay cả khi chưa bấm START (không cần quyền micro để hỏi hỗ trợ API). Khi bắt đầu ghi, dòng **Trạng thái khi thu** mới báo AGC hệ thống có được kích hoạt trên nguồn âm đang dùng hay không. `AutomaticGainControl.isAvailable()` chỉ xác nhận tính sẵn có của effect Android, **không cam kết chất lượng chống méo của phần cứng**.
+
+Phải cài **APK v9.1 mới** để có kiểm tra API native này, chỉ OTA không đủ. APK mới có thể cài đè APK cũ **nếu được ký bằng cùng chứng chỉ Android và `versionCode` tăng**. Nếu GitHub debug dùng khóa ký khác, Android có thể yêu cầu gỡ bản cũ; **hãy xuất/sao lưu file ghi âm trước**, vì gỡ ứng dụng có thể xóa dữ liệu riêng của ứng dụng. Sau khi cài APK v9.1, OTA UI thuộc `nativeApi=6`.
