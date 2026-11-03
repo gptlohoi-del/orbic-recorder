@@ -234,7 +234,7 @@ public class RecorderService extends Service {
         int confirm = Math.max(1, (cfg.getInt("minSpeech", 180) + FRAME_MS - 1) / FRAME_MS);
         int preFrames = Math.max(0, (cfg.getInt("pre", 1000) + FRAME_MS - 1) / FRAME_MS);
         int tailFrames = Math.max(1, (cfg.getInt("tail", 1000) + FRAME_MS - 1) / FRAME_MS);
-        int warnFrames = Math.max(1, cfg.getInt("warnSeconds", 20) * 1000 / FRAME_MS);
+        int warnFrames = Math.max(1, cfg.getInt("warnSeconds", 10000) * 1000 / FRAME_MS);
         int splitMinutes = cfg.getInt("splitMinutes", 15);
         if (splitMinutes < 1 || splitMinutes > 60) splitMinutes = 15;
         long splitFrames = (long) splitMinutes * 60 * 1000 / FRAME_MS;

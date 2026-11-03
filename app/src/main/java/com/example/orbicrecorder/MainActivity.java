@@ -304,7 +304,7 @@ public class MainActivity extends Activity {
                 data.put("gearY", cfg.getInt("gearY", 0));
                 data.put("numericLimits", cfg.getString("numericLimits", "{}"));
                 data.put("minSpeech", cfg.getInt("minSpeech", 180));
-                data.put("warnSeconds", cfg.getInt("warnSeconds", 20));
+                data.put("warnSeconds", cfg.getInt("warnSeconds", 10000));
                 data.put("backupRaw", cfg.getBoolean("backupRaw", true));
                 data.put("splitMinutes", cfg.getInt("splitMinutes", 15));
                 data.put("theme", cfg.getString("theme", "system"));
@@ -367,7 +367,7 @@ public class MainActivity extends Activity {
                 String[] numeric = { "threshold", "minSpeech", "pre", "tail", "warnSeconds",
                         "fadeIn", "fadeOut", "musicVolume", "listenDelay", "uiFont", "uiOpacity" };
                 int[] low = { -80, 20, 0, 100, 5, 0, 0, 0, 0, 75, 30 };
-                int[] high = { -5, 2000, 10000, 10000, 600, 30000, 30000, 100, 5000, 160, 100 };
+                int[] high = { -5, 2000, 10000, 10000, 10000, 30000, 30000, 100, 5000, 160, 100 };
                 SharedPreferences.Editor edit = config().edit();
                 for (int i = 0; i < numeric.length; i++) {
                     if (v.has(numeric[i])) {

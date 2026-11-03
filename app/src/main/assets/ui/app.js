@@ -15,7 +15,7 @@
     {key:'minSpeech',label:'Thời gian xác nhận có tiếng',unit:'ms',default:180,min:60,max:1000,step:10,hardMin:20,hardMax:2000,group:'rec'},
     {key:'pre',label:'Giữ âm thanh trước tiếng động',unit:'ms',default:1000,min:0,max:5000,step:100,hardMin:0,hardMax:10000,group:'rec'},
     {key:'tail',label:'Giữ âm thanh sau tiếng động',unit:'ms',default:1000,min:100,max:5000,step:100,hardMin:100,hardMax:10000,group:'rec'},
-    {key:'warnSeconds',label:'Cảnh báo khi không có tín hiệu',unit:'giây',default:20,min:10,max:120,step:5,hardMin:5,hardMax:600,group:'rec'},
+    {key:'warnSeconds',label:'Cảnh báo khi không có tín hiệu',unit:'giây',default:10000,min:10,max:10000,step:5,hardMin:5,hardMax:10000,group:'rec'},
     {key:'uiFont',label:'Tỷ lệ kích thước chữ',unit:'%',default:100,min:75,max:160,step:5,group:'view'},
     {key:'uiOpacity',label:'Độ đậm nền các khung',unit:'%',default:100,min:30,max:100,step:5,group:'view'}
   ];
