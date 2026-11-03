@@ -68,11 +68,17 @@ jobs:
           test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
 
+      - name: Check Release APK supports Android 9
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging \
+            app/build/outputs/apk/release/app-release.apk | grep -F "sdkVersion:'28'"
       - name: Rename signed Release APK to Recorder plus version
         shell: bash
         run: |
           set -euo pipefail
-          VERSION="9.2.${GITHUB_RUN_NUMBER}"
+          VERSION="9.3.${GITHUB_RUN_NUMBER}"
           SOURCE="app/build/outputs/apk/release/app-release.apk"
           TARGET="app/build/outputs/apk/release/Recorder-${VERSION}.apk"
           test -s "$SOURCE"

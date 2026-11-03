@@ -35,6 +35,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Check Android 9 compatibility of source
+        run: python3 tests/test_android9_compat.py
       - name: Test limiter processing (pure Java)
         run: python3 tests/test_audio_dynamics.py
       - name: Android SDK
@@ -47,16 +49,26 @@ jobs:
           gradle-version: '8.10.2'
       - name: Build APK debug (auto signed)
         run: gradle --no-daemon :app:assembleDebug
+      - name: Verify APK installs on Android 9 (minSdk 28)
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          BADGING="$($ANDROID_HOME/build-tools/35.0.0/aapt dump badging "$APK")"
+          echo "$BADGING" | grep -F "sdkVersion:'28'"
+          echo "$BADGING" | grep -F "package: name='com.example.orbicrecorder'"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
       - name: Export APK
         run: |
           set -euo pipefail
           test -s app/build/outputs/apk/debug/app-debug.apk
           mkdir -p dist
-          cp app/build/outputs/apk/debug/app-debug.apk dist/ORBIC-RECORDER-v9.2-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk dist/ORBIC-RECORDER-v9.3-debug.apk
       - name: Upload APK to Actions artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ORBIC-RECORDER-v9.2-debug
-          path: dist/ORBIC-RECORDER-v9.2-debug.apk
+          name: ORBIC-RECORDER-v9.3-debug
+          path: dist/ORBIC-RECORDER-v9.3-debug.apk
           retention-days: 30
           if-no-files-found: error

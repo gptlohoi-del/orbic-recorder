@@ -1,3 +1,24 @@
+# ORBIC RECORDER v9.3 – tương thích Android 9 (API 28)
+
+**Đã sửa lỗi không cài được trên Android 9 do `minSdk 29` trong bản v9.2.**
+Bản này sử dụng `minSdk 28`, vẫn giữ nguyên tên gói
+`com.example.orbicrecorder`, các chức năng ghi theo tiếng động, hai bài nhạc,
+Fade, AGC/Limiter (nếu thiết bị hỗ trợ), bốn kiểu sóng âm, và OTA `nativeApi=7`.
+Không cần loại bỏ chức năng nâng cao để sửa lỗi cài đặt này.
+
+## Hướng dẫn Android 9
+
+1. Upload mã nguồn lên GitHub, giữ thư mục `ota/` đã có. Vào **Actions → Tạo APK Orbic Recorder (không cần Release Key)**, rồi tải artifact `ORBIC-RECORDER-v9.3-debug` và giải nén APK.
+2. APK được build với **minSdk 28**. Workflow dùng `aapt dump badging` để kiểm tra chính APK đã biên dịch; vẫn cần thử cài và ghi WAV trên Android 9 thực tế.
+3. **Rất quan trọng về WAV:** Android 9 không có API MediaStore `RELATIVE_PATH` / `IS_PENDING` của Android 10. Vì thế nếu **không chọn thư mục**, WAV mặc định được lưu ở vùng `Android/data/com.example.orbicrecorder/files/Music/OrbicRecorder/` (thường trong `DaLoc/` và `Goc/`); dữ liệu ở đây **có thể bị xóa khi gỡ ứng dụng**. Hãy vào **Settings → Chọn thư mục lưu WAV**, chọn thư mục riêng như `Music/OrbicRecorder` trên bộ nhớ chung bằng trình chọn thư mục Android (SAF). WAV đã xuất sang thư mục này tồn tại độc lập với dữ liệu riêng của ứng dụng. Một số trình chọn thư mục của thiết bị có hạn chế riêng.
+4. Trên Android 10 trở lên, không chọn thư mục sẽ tiếp tục xuất WAV vào `Music/OrbicRecorder` bằng MediaStore như v9.2.
+5. Nếu gặp **“Ứng dụng chưa được cài đặt”** dù APK đã có `minSdk 28`: kiểm tra bộ nhớ trống và tình trạng APK đã tải đủ; nếu máy đã có ứng dụng cùng tên gói nhưng khác chữ ký thì phải dùng cùng keystore để cài đè, hoặc **sao lưu WAV và cấu hình trước khi gỡ bản cũ**. Nếu báo `INSTALL_FAILED_VERSION_DOWNGRADE`, hãy nâng `versionCode` thay vì gỡ ứng dụng khi còn dữ liệu cần giữ. GitHub debug mới có thể ký bằng chứng chỉ khác các bản cũ.
+6. WebView trên Android 9 nên được cập nhật qua Google Play nếu có thể; mã giao diện cũng đã được điều chỉnh để tránh các cú pháp JavaScript/CSS quá mới. OTA chỉ cập nhật giao diện; **lỗi minSdk phải cài APK mới**.
+
+**Giới hạn kiểm thử:** Trong môi trường chuẩn bị mã nguồn chưa có Android SDK/emulator hoặc điện thoại Android 9, nên chưa build và cài APK thực tế. Các phép thử nguồn và JavaScript được chạy tại đây; GitHub Actions sẽ build và kiểm tra APK.
+
+---
+
 # ORBIC RECORDER v9.2 — 4 kiểu sóng âm
 
 **Mới:** Trong **Settings → GIAO DIỆN**, chọn một trong bốn kiểu sóng âm có hình xem trước: **Cột đứng**, **Cột đối xứng**, **Đường sóng mềm**, **Chấm nhịp**. Thay đổi hiện ngay, tự lưu trong Android và được khôi phục ở lần mở sau. Vạch ngưỡng dBFS vẫn có ở cả bốn kiểu; thay đổi kiểu không tác động micro, mức độ nhạy hay dữ liệu WAV. Mục **Độ cao vùng sóng âm** tiếp tục hoạt động như trước.

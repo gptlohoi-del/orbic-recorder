@@ -9,6 +9,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.DocumentsContract;
@@ -30,7 +31,7 @@ import java.util.Collections;
 
 /** Native recorder from v4 + OTA-updateable local HTML/CSS/JS user interface. */
 public class MainActivity extends Activity {
-    private static final String NATIVE_LABEL = "ORBIC RECORDER v9.2";
+    private static final String NATIVE_LABEL = "ORBIC RECORDER v9.3";
     private static final String LOCAL_ORIGIN = "https://appassets.androidplatform.net";
     private static final int REQUEST_MIC = 101;
     private static final int REQUEST_FOLDER = 102;
@@ -81,6 +82,13 @@ public class MainActivity extends Activity {
             RecordingArchive.recoverOnLaunch(this);
         }
         buildWebView();
+        // Inform Android 9 users that an SAF-selected folder survives app removal.
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
+                !config().getBoolean("android9StorageTipShown", false)) {
+            config().edit().putBoolean("android9StorageTipShown", true).apply();
+            mainThread.postDelayed(() -> toast(
+                    "Android 9: Vào Cài đặt > Chọn thư mục lưu WAV để giữ bản ghi khi gỡ ứng dụng."), 1800);
+        }
         // Check quietly on app opening; recording itself does not need Internet.
         ota.check();
     }
@@ -405,7 +413,9 @@ public class MainActivity extends Activity {
                 data.put("source", p.getString("source", "Chưa xác định"));
                 data.put("file", p.getString("file", "Chưa có"));
                 data.put("error", p.getString("error", ""));
-                data.put("folder", cfg.getString("folderLabel", "Music/OrbicRecorder"));
+                data.put("folder", cfg.getString("folderLabel",
+                        Build.VERSION.SDK_INT <= Build.VERSION_CODES.P
+                                ? "Bộ nhớ ứng dụng/OrbicRecorder (Android 9)" : "Music/OrbicRecorder"));
                 data.put("pre", cfg.getInt("pre", 1000));
                 data.put("tail", cfg.getInt("tail", 1000));
                 data.put("threshold", cfg.getInt("threshold", -38));
@@ -489,7 +499,9 @@ public class MainActivity extends Activity {
                     case "resetFolder":
                         if (captureActive()) { toast("Hãy dừng ghi trước khi đổi thư mục"); break; }
                         config().edit().remove("treeUri").remove("folderLabel").apply();
-                        toast("Đã chọn thư mục Music/OrbicRecorder"); break;
+                        toast(Build.VERSION.SDK_INT <= Build.VERSION_CODES.P
+                                ? "Android 9: WAV sẽ lưu trong bộ nhớ ứng dụng. Nên chọn thư mục riêng để giữ WAV khi gỡ app."
+                                : "Đã chọn thư mục Music/OrbicRecorder"); break;
                     case "playLast": playLast(); break;
                     case "checkOta": ota.check(); break;
                     case "installOta":

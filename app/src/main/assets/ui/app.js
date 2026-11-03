@@ -3,7 +3,8 @@
   const $ = id => document.getElementById(id);
   const send = code => { try { window.Orbic.action(code); } catch (e) { console.error(e); } };
   const save = object => { try { window.Orbic.saveSettings(JSON.stringify(object)); } catch (e) { console.error(e); } };
-  const setText = (id, value) => { $(id).textContent = String(value ?? ''); };
+  const coalesce = (a, b) => a == null ? b : a; // Older Android 9 WebView
+  const setText = (id, value) => { $(id).textContent = String(coalesce(value, '')); };
   const fmt = ms => { const n = Math.floor(Math.max(0, Number(ms) || 0) / 1000); return [Math.floor(n / 3600), Math.floor(n / 60) % 60, n % 60].map(x => String(x).padStart(2, '0')).join(':'); };
   const shortTime = ms => { const n = Math.floor(Math.max(0, Number(ms) || 0) / 1000); return String(Math.floor(n / 60)).padStart(2,'0') + ':' + String(n % 60).padStart(2,'0'); };
   const specs = [
@@ -101,7 +102,7 @@
       input.closest('.wave-style-option').classList.toggle('selected',input.checked);
     }
     renderWaveform();
-    refreshThreshold(current?.threshold??data.threshold??-38);
+    refreshThreshold(coalesce(current && current.threshold, coalesce(data.threshold, -38)));
   }
   function renderWaveform(){
     if(activeWaveStyle==='line'){
@@ -132,7 +133,7 @@
     const foot=container.querySelector('.numeric-foot span');
     const valueLabel=container.querySelector('.numeric-value');
     function updateViews(){
-      const bound=rule(spec); let value=Number(data[spec.key] ?? bound.default);
+      const bound=rule(spec); let value=Number(coalesce(data[spec.key], bound.default));
       range.min=number.min=bound.min; range.max=number.max=bound.max;
       range.step=number.step=bound.step;
       range.value=number.value=value;
@@ -155,7 +156,7 @@
   }
   specs.forEach(presentNumber);
   function renderAdvanced() {
-    const wrap=$('advancedNumbers'); wrap.replaceChildren();
+    const wrap=$('advancedNumbers'); while(wrap.firstChild)wrap.removeChild(wrap.firstChild);
     for(const spec of specs){
       const r=rule(spec), item=document.createElement('div');item.className='advanced-item';
       const name=document.createElement('strong'); name.textContent=spec.label; item.append(name);
@@ -163,19 +164,19 @@
       for(const field of ['min','max','step','default']){
         const label=document.createElement('label');label.textContent=field.toUpperCase();
         const input=document.createElement('input');input.type='number';input.step='1';input.value=r[field];
-        const lo=spec.hardMin??spec.min, hi=spec.hardMax??spec.max;
+        const lo=coalesce(spec.hardMin,spec.min), hi=coalesce(spec.hardMax,spec.max);
         input.min=(field==='step'?1:lo);input.max=(field==='step'?hi-lo+1:hi);
         label.append(input);item.append(label);fields[field]=input;
       }
       for(const input of Object.values(fields))input.onchange=()=>{
-        const proposed=Object.fromEntries(Object.entries(fields).map(([k,v])=>[k,Number(v.value)]));
-        const lo=spec.hardMin??spec.min,hi=spec.hardMax??spec.max;
+        const proposed={}; for(const k of Object.keys(fields))proposed[k]=Number(fields[k].value);
+        const lo=coalesce(spec.hardMin,spec.min),hi=coalesce(spec.hardMax,spec.max);
         if(Object.values(proposed).some(v=>!Number.isInteger(v)) || proposed.min<lo || proposed.max>hi || proposed.min>proposed.max || proposed.step<1 || proposed.step>proposed.max-proposed.min+1 || proposed.default<proposed.min || proposed.default>proposed.max){
           alert(`Giá trị không hợp lệ. Giới hạn an toàn: ${lo} đến ${hi}.`);
           renderAdvanced();return;
         }
         limits[spec.key]=proposed;
-        data[spec.key]=cap(Number(data[spec.key]??proposed.default),proposed.min,proposed.max);
+        data[spec.key]=cap(Number(coalesce(data[spec.key],proposed.default)),proposed.min,proposed.max);
         save({numericLimits:limits,[spec.key]:data[spec.key]});
         document.querySelector(`[data-key="${spec.key}"]`).updateViews();
         setText('saveStatus','Đã tự lưu giới hạn');
@@ -188,12 +189,12 @@
     if(v==='system')document.documentElement.removeAttribute('data-theme');
     else document.documentElement.dataset.theme=v;
     document.documentElement.style.setProperty('--font-scale',cap(Number(data.uiFont||100),75,160)/100);
-    document.documentElement.style.setProperty('--panel-opacity',cap(Number(data.uiOpacity??100),30,100)/100);
-    document.documentElement.style.setProperty('--wave-height',cap(Number(data.waveHeight??92),30,180)+'px');
+    document.documentElement.style.setProperty('--panel-opacity',cap(Number(coalesce(data.uiOpacity,100)),30,100)/100);
+    document.documentElement.style.setProperty('--wave-height',cap(Number(coalesce(data.waveHeight,92)),30,180)+'px');
   }
   function openSettings() {
     if (!current)return;
-    for(const spec of specs) data[spec.key]=current[spec.key]??spec.default;
+    for(const spec of specs) data[spec.key]=coalesce(current[spec.key],spec.default);
     try { limits=JSON.parse(current.numericLimits||'{}')||{}; }catch(e){limits={};}
     data.theme=current.theme||'system';
     data.waveStyle=current.waveStyle||data.waveStyle||'mirror';
@@ -236,7 +237,7 @@
   function changeThreshold(direction){
     if(!current)return;
     const spec=specs.find(s=>s.key==='threshold'),r=rule(spec);
-    const previous=Number(current.threshold??data.threshold??spec.default);
+    const previous=Number(coalesce(current.threshold,coalesce(data.threshold,spec.default)));
     const next=cap(previous+direction*r.step,r.min,r.max);
     data.threshold=current.threshold=next;
     save({threshold:next});
@@ -268,7 +269,7 @@
     try {
       const d=JSON.parse(window.Orbic.snapshot());current=d;
       if(!settingsOpened && Object.keys(data).length===0){
-        for(const spec of specs)data[spec.key]=d[spec.key]??spec.default;
+        for(const spec of specs)data[spec.key]=coalesce(d[spec.key],spec.default);
         data.theme=d.theme||'system';data.waveStyle=d.waveStyle||'mirror';applyTheme();applyWaveStyle(data.waveStyle);
       }
       const playing=d.musicStatus!=='idle', changing=!!d.pendingMusic||!!d.pendingResume;
@@ -311,10 +312,10 @@
       $('rollback').hidden=!d.canRollback;
       levels.shift();levels.push(d.running&&!d.paused&&!d.musicAudible&&!changing&&!d.musicSuspended?cap(Number(d.level||0),0,100):0);
       renderWaveform();
-      if(!settingsOpened) data.threshold=d.threshold??data.threshold;
-      refreshThreshold(d.threshold??-38);
+      if(!settingsOpened) data.threshold=coalesce(d.threshold,data.threshold);
+      refreshThreshold(coalesce(d.threshold,-38));
       if(!settingsOpened){
-        for(const key of ['uiFont','uiOpacity','waveHeight','theme']) data[key]=d[key]??data[key];
+        for(const key of ['uiFont','uiOpacity','waveHeight','theme']) data[key]=coalesce(d[key],data[key]);
         if((d.waveStyle||'mirror')!==activeWaveStyle)applyWaveStyle(d.waveStyle||'mirror');
         applyTheme();
       }

@@ -93,4 +93,4 @@ assert 'edit.putString("waveStyle", waveStyle)' in activity
 assert 'NATIVE_API = 7' in script
 assert 'CẦN CẬP NHẬT APK ĐỂ KIỂM TRA' in js
 assert 'NATIVE_API = 7' in script
-print('PASS: v9.2 source, device AGC availability, AGC/limiter, Settings, OTA API, JS syntax')
+print('PASS: v9.3 source, device AGC availability, AGC/limiter, Settings, OTA API, JS syntax')

@@ -4,6 +4,7 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Environment;
 import android.provider.DocumentsContract;
 import android.provider.MediaStore;
@@ -277,16 +278,57 @@ public final class RecordingArchive {
         if (!tree.isEmpty()) {
             try { destination = exportToFolder(context, source, tree); }
             catch (Exception folderError) {
-                state(context).edit().putString("error", "Không lưu được thư mục tùy chọn; chuyển sang Music/OrbicRecorder: "
+                state(context).edit().putString("error", "Không lưu được thư mục tùy chọn; dùng thư mục lưu dự phòng: "
                         + folderError.getMessage()).apply();
             }
         }
-        if (destination == null) destination = exportToMusic(context, source, raw);
+        if (destination == null) {
+            // RELATIVE_PATH / IS_PENDING were introduced in Android 10 (API 29).
+            // Android 9 must not use that MediaStore workflow. Use an app-owned
+            // music directory (no storage permission) unless user chose an SAF folder.
+            destination = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+                    ? exportToMusic(context, source, raw)
+                    : exportToAppMusic(context, source, raw);
+        }
         SharedPreferences.Editor editor = state(context).edit();
         if (raw) editor.putString("lastRaw", source.getName());
         else editor.putString("uri", destination.toString()).putString("file", source.getName());
         editor.apply();
         if (!source.delete()) throw new IOException("Đã xuất WAV nhưng không xóa được file tạm: " + source.getName());
+    }
+
+    /**
+     * Android 9 (API 28) cannot use the Android 10 MediaStore RELATIVE_PATH API.
+     * Keep WAV files in app-specific Music storage without requesting broad write
+     * permissions. Users wanting recordings to survive uninstall should pick a
+     * shared folder with ACTION_OPEN_DOCUMENT_TREE in Settings (SAF works on 9).
+     * A failed export never removes the source WAV: recovery retries on launch.
+     */
+    private static Uri exportToAppMusic(Context context, File source, boolean raw) throws IOException {
+        File base = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC);
+        if (base == null) base = context.getFilesDir();
+        File folder = new File(base, "OrbicRecorder/" + (raw ? "Goc" : "DaLoc"));
+        if (!folder.isDirectory() && !folder.mkdirs())
+            throw new IOException("Không tạo được thư mục lưu WAV Android 9");
+        File destination = new File(folder, source.getName());
+        File pending = new File(folder, source.getName() + ".pending");
+        boolean copied = false;
+        try (InputStream in = new FileInputStream(source);
+             FileOutputStream out = new FileOutputStream(pending)) {
+            byte[] buffer = new byte[32768];
+            int n;
+            while ((n = in.read(buffer)) != -1) out.write(buffer, 0, n);
+            out.flush();
+            out.getFD().sync();
+            copied = true;
+        } finally {
+            if (!copied) pending.delete();
+        }
+        if (!pending.renameTo(destination)) {
+            pending.delete();
+            throw new IOException("Không hoàn tất được WAV Android 9: " + source.getName());
+        }
+        return Uri.fromFile(destination);
     }
 
     private static Uri exportToMusic(Context context, File source, boolean raw) throws IOException {
