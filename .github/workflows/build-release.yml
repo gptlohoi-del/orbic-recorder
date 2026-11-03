@@ -69,7 +69,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          VERSION="6.0.${GITHUB_RUN_NUMBER}"
+          VERSION="8.0.${GITHUB_RUN_NUMBER}"
           SOURCE="app/build/outputs/apk/release/app-release.apk"
           TARGET="app/build/outputs/apk/release/Recorder-${VERSION}.apk"
           test -s "$SOURCE"

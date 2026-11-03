@@ -29,7 +29,7 @@ import java.util.Collections;
 
 /** Native recorder from v4 + OTA-updateable local HTML/CSS/JS user interface. */
 public class MainActivity extends Activity {
-    private static final String NATIVE_LABEL = "ORBIC RECORDER v6";
+    private static final String NATIVE_LABEL = "ORBIC RECORDER v8";
     private static final String LOCAL_ORIGIN = "https://appassets.androidplatform.net";
     private static final int REQUEST_MIC = 101;
     private static final int REQUEST_FOLDER = 102;
@@ -44,7 +44,14 @@ public class MainActivity extends Activity {
     private Uri queuedMusic;
     private String queuedMusicName;
     private boolean musicShouldReturnListening;
+    // A cancelled/older song must never restart listening after DỪNG & LƯU.
+    private long listeningRestoreTicket;
     private boolean pendingMusic;
+    private boolean pendingResume;
+    private Uri switchMusicUri;
+    private String switchMusicName;
+    private int switchMusicSlot;
+    private int activeSlot;
     private int waitCycles;
 
     private SharedPreferences config() { return getSharedPreferences("config", MODE_PRIVATE); }
@@ -52,7 +59,10 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        music = new MusicPlayer(this, this::onMusicEnded);
+        music = new MusicPlayer(this, new MusicPlayer.Listener() {
+            @Override public void ended() { onMusicEnded(); }
+            @Override public void paused() { onMusicPaused(); }
+        });
         ota = new OtaManager(this, () -> mainThread.post(() -> {
             if (web != null && ("installed".equals(ota.getStatus()) || "rolledback".equals(ota.getStatus()))) {
                 web.clearCache(true);
@@ -140,7 +150,12 @@ public class MainActivity extends Activity {
         if (recorder().getBoolean("running", false) || recorder().getBoolean("saving", false)) return;
         try {
             recorder().edit().putBoolean("starting", true).apply();
-            startForegroundService(new Intent(this, RecorderService.class).setAction("START"));
+            // Ghi âm được bật ngay cả khi đang phát nhạc, nhưng micro không được mở
+            // cho đến lúc nhạc thực sự kết thúc hoặc dừng.
+            boolean heldByMusic = music.isBlockingMic() || pendingMusic || pendingResume;
+            if (heldByMusic) musicShouldReturnListening = true;
+            startForegroundService(new Intent(this, RecorderService.class)
+                    .setAction(heldByMusic ? "START_HELD" : "START"));
         } catch (Exception e) {
             recorder().edit().putBoolean("starting", false).apply();
             toast("Không thể bắt đầu ghi: " + e.getMessage());
@@ -166,7 +181,7 @@ public class MainActivity extends Activity {
     private void playLast() {
         String value = recorder().getString("uri", "");
         if (value.isEmpty()) { toast("Chưa có bản ghi"); return; }
-        startMusic(Uri.parse(value), "Bản ghi gần nhất");
+        queueSwitchMusic(Uri.parse(value), "Bản ghi gần nhất", 0);
     }
 
     private void chooseMusic(int slot) {
@@ -184,13 +199,29 @@ public class MainActivity extends Activity {
     }
 
     private void playMusic(int slot) {
-        if (pendingMusic || music.isActive() || recorder().getBoolean("saving", false)
+        if (pendingMusic || pendingResume || recorder().getBoolean("saving", false)
                 || RecordingArchive.isRecovering()) {
-            toast("Hãy chờ thao tác hiện tại hoàn tất hoặc dừng bài đang phát"); return;
+            toast("Hãy chờ thao tác đang thực hiện hoàn tất"); return;
         }
         String saved = config().getString("song" + slot + "Uri", "");
         if (saved.isEmpty()) { chooseMusic(slot == 1 ? REQUEST_MUSIC_1 : REQUEST_MUSIC_2); return; }
-        startMusic(Uri.parse(saved), musicName(slot));
+        queueSwitchMusic(Uri.parse(saved), musicName(slot), slot);
+    }
+
+    /** All changes of track are faded; mic remains held between consecutive songs. */
+    private void queueSwitchMusic(Uri uri, String label, int slot) {
+        if (pendingMusic || pendingResume || recorder().getBoolean("saving", false)) {
+            toast("Vui lòng đợi thao tác hiện tại"); return;
+        }
+        if (music.isActive()) {
+            switchMusicUri = uri;
+            switchMusicName = label;
+            switchMusicSlot = slot;
+            music.requestStop(config().getInt("pauseStopFade", 2000));
+        } else {
+            activeSlot = slot;
+            startMusic(uri, label);
+        }
     }
 
     private void startMusic(Uri uri, String label) {
@@ -200,16 +231,14 @@ public class MainActivity extends Activity {
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQUEST_MIC_MUSIC);
             return;
         }
-        if (music.isActive() || pendingMusic || recorder().getBoolean("saving", false)
+        if (music.isActive() || pendingMusic || pendingResume || recorder().getBoolean("saving", false)
                 || recorder().getBoolean("starting", false)) {
             toast("Không thể phát khi đang xử lý âm thanh"); return;
-        }
-        if (recorder().getBoolean("running", false) && recorder().getBoolean("paused", false)) {
-            toast("Đang PAUSE thủ công. Hãy tiếp tục ghi hoặc dừng trước khi phát nhạc."); return;
         }
         queuedMusic = uri;
         queuedMusicName = label;
         pendingMusic = true;
+        listeningRestoreTicket++; // Hủy callback phục hồi còn chờ từ bài nhạc cũ.
         musicShouldReturnListening = true;
         if (recorder().getBoolean("running", false)) {
             sendRecorder("MUSIC_PAUSE");
@@ -243,19 +272,89 @@ public class MainActivity extends Activity {
         } catch (Exception e) { toast(e.getMessage()); }
     }
 
+    /** Called only after the player has truly paused (volume 0, no audible music). */
+    private void onMusicPaused() {
+        scheduleListeningRestore(false);
+    }
+
     private void onMusicEnded() {
+        pendingResume = false;
+        if (switchMusicUri != null) {
+            Uri next = switchMusicUri;
+            String name = switchMusicName;
+            int slot = switchMusicSlot;
+            switchMusicUri = null;
+            switchMusicName = null;
+            activeSlot = slot;
+            // Do not release the mic hold between two consecutive tracks.
+            startMusic(next, name);
+            return;
+        }
+        activeSlot = 0;
         if (!musicShouldReturnListening) return;
         musicShouldReturnListening = false;
+        scheduleListeningRestore(true);
+    }
+
+    private void scheduleListeningRestore(boolean completed) {
+        long ticket = ++listeningRestoreTicket;
         int delay = config().getInt("listenDelay", 600);
-        mainThread.postDelayed(() -> {
-            if (music.isActive() || pendingMusic) return;
-            if (recorder().getBoolean("running", false)) {
-                sendRecorder("MUSIC_RESUME");
-            } else if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
-                    == PackageManager.PERMISSION_GRANTED) {
-                startRecording();
-            } else toast("Cấp quyền micro rồi nhấn BẮT ĐẦU NGHE để ghi theo tiếng động");
-        }, delay);
+        mainThread.postDelayed(() -> restoreListening(ticket, 40), delay);
+    }
+
+    private void restoreListening(long ticket, int retries) {
+        if (ticket != listeningRestoreTicket || music.isBlockingMic() || pendingMusic || pendingResume)
+            return;
+        SharedPreferences p = recorder();
+        if (p.getBoolean("running", false)) {
+            // Resume mic; never override a manual PAUSE on the recording session.
+            sendRecorder("MUSIC_RESUME");
+            return;
+        }
+        // START_HELD may still be launching the service: wait for the state.
+        if (p.getBoolean("starting", false) && retries > 0) {
+            mainThread.postDelayed(() -> restoreListening(ticket, retries - 1), 100);
+        }
+        // If user has not pressed START, NEVER start recording automatically.
+    }
+
+    private void resumeMusicSafely() {
+        if (!"paused".equals(music.getStatus()) || pendingResume) return;
+        pendingResume = true;
+        listeningRestoreTicket++; // Cancel delayed microphone restoration.
+        waitCycles = 0;
+        waitForResumeMicRelease(false);
+    }
+
+    private void waitForResumeMicRelease(boolean holdRequested) {
+        if (!pendingResume) return;
+        SharedPreferences p = recorder();
+        if (p.getBoolean("starting", false)) {
+            if (++waitCycles < 90)
+                mainThread.postDelayed(() -> waitForResumeMicRelease(holdRequested), 60);
+            else { pendingResume = false; toast("Chưa thể xác nhận trạng thái micro"); }
+            return;
+        }
+        if (!p.getBoolean("running", false)) {
+            pendingResume = false;
+            music.resume();
+            return;
+        }
+        if (!holdRequested) {
+            sendRecorder("MUSIC_PAUSE");
+            mainThread.postDelayed(() -> waitForResumeMicRelease(true), 70);
+            return;
+        }
+        if (p.getBoolean("musicSuspended", false)) {
+            pendingResume = false;
+            music.resume();
+        } else if (++waitCycles < 90) {
+            mainThread.postDelayed(() -> waitForResumeMicRelease(true), 60);
+        } else {
+            pendingResume = false;
+            sendRecorder("MUSIC_RESUME");
+            toast("Micro chưa nhường quyền an toàn; nhạc vẫn tạm dừng");
+        }
     }
 
     private boolean captureActive() {
@@ -270,6 +369,9 @@ public class MainActivity extends Activity {
                 data.put("running", p.getBoolean("running", false));
                 data.put("musicSuspended", p.getBoolean("musicSuspended", false));
                 data.put("pendingMusic", pendingMusic);
+                data.put("pendingResume", pendingResume);
+                data.put("musicAudible", music.isBlockingMic());
+                data.put("activeSlot", activeSlot);
                 music.writeSnapshot(data);
                 data.put("song1Name", musicName(1));
                 data.put("song2Name", musicName(2));
@@ -296,15 +398,17 @@ public class MainActivity extends Activity {
                 data.put("threshold", cfg.getInt("threshold", -38));
                 data.put("fadeIn", cfg.getInt("fadeIn", 3000));
                 data.put("fadeOut", cfg.getInt("fadeOut", 5000));
+                data.put("pauseStopFade", cfg.getInt("pauseStopFade", 2000));
                 data.put("musicVolume", cfg.getInt("musicVolume", 80));
                 data.put("listenDelay", cfg.getInt("listenDelay", 600));
                 data.put("uiFont", cfg.getInt("uiFont", 100));
                 data.put("uiOpacity", cfg.getInt("uiOpacity", 100));
+                data.put("waveHeight", cfg.getInt("waveHeight", 92));
                 data.put("gearX", cfg.getInt("gearX", 99));
                 data.put("gearY", cfg.getInt("gearY", 0));
                 data.put("numericLimits", cfg.getString("numericLimits", "{}"));
                 data.put("minSpeech", cfg.getInt("minSpeech", 180));
-                data.put("warnSeconds", cfg.getInt("warnSeconds", 10000));
+                data.put("warnSeconds", cfg.getInt("warnSeconds", 9999));
                 data.put("backupRaw", cfg.getBoolean("backupRaw", true));
                 data.put("splitMinutes", cfg.getInt("splitMinutes", 15));
                 data.put("theme", cfg.getString("theme", "system"));
@@ -323,24 +427,36 @@ public class MainActivity extends Activity {
             if (command == null || command.length() > 32) return;
             runOnUiThread(() -> {
                 switch (command) {
-                    case "start": if (!music.isActive() && !pendingMusic) startRecording(); break;
                     case "chooseSong1": chooseMusic(REQUEST_MUSIC_1); break;
                     case "chooseSong2": chooseMusic(REQUEST_MUSIC_2); break;
                     case "chooseOther": chooseMusic(REQUEST_MUSIC_OTHER); break;
                     case "music1": playMusic(1); break;
                     case "music2": playMusic(2); break;
-                    case "musicPause": music.pause(); break;
-                    case "musicResume": music.resume(); break;
+                    case "musicPause": music.requestPause(config().getInt("pauseStopFade", 2000)); break;
+                    case "musicResume": resumeMusicSafely(); break;
                     case "musicStop":
-                        if (pendingMusic) { pendingMusic = false; sendRecorder("MUSIC_RESUME"); }
-                        music.stop(true); break;
-                    case "save":
-                        if (recorder().getBoolean("running", false) && !music.isActive() && !pendingMusic)
-                            sendRecorder("SAVE");
+                        switchMusicUri = null;
+                        switchMusicName = null;
+                        if (pendingMusic) {
+                            pendingMusic = false;
+                            onMusicEnded();
+                        } else if (pendingResume) {
+                            pendingResume = false;
+                            music.requestStop(config().getInt("pauseStopFade", 2000));
+                        } else {
+                            music.requestStop(config().getInt("pauseStopFade", 2000));
+                        }
                         break;
-                    case "pause": if (recorder().getBoolean("running", false) && !music.isActive()) sendRecorder("PAUSE"); break;
+                    case "start": startRecording(); break;
+                    case "pause": if (recorder().getBoolean("running", false)) sendRecorder("PAUSE"); break;
                     case "resume": if (recorder().getBoolean("running", false)) sendRecorder("RESUME"); break;
-                    case "stop": if (recorder().getBoolean("running", false) && !music.isActive()) sendRecorder("STOP"); break;
+                    case "stop":
+                        // DỪNG & LƯU ngừng phiên ghi, không tác động tới nhạc.
+                        // Không được tự khởi động lại ghi sau khi bài nhạc kết thúc.
+                        musicShouldReturnListening = false;
+                        listeningRestoreTicket++;
+                        if (recorder().getBoolean("running", false)) sendRecorder("STOP");
+                        break;
                     case "chooseFolder": chooseFolder(); break;
                     case "resetFolder":
                         if (captureActive()) { toast("Hãy dừng ghi trước khi đổi thư mục"); break; }
@@ -365,9 +481,9 @@ public class MainActivity extends Activity {
             try {
                 JSONObject v = new JSONObject(json);
                 String[] numeric = { "threshold", "minSpeech", "pre", "tail", "warnSeconds",
-                        "fadeIn", "fadeOut", "musicVolume", "listenDelay", "uiFont", "uiOpacity" };
-                int[] low = { -80, 20, 0, 100, 5, 0, 0, 0, 0, 75, 30 };
-                int[] high = { -5, 2000, 10000, 10000, 10000, 30000, 30000, 100, 5000, 160, 100 };
+                        "fadeIn", "fadeOut", "pauseStopFade", "musicVolume", "listenDelay", "uiFont", "uiOpacity", "waveHeight" };
+                int[] low = { -80, 20, 0, 100, 5, 0, 0, 0, 0, 0, 75, 30, 30 };
+                int[] high = { -5, 2000, 10000, 10000, 9999, 30000, 30000, 15000, 100, 5000, 160, 100, 180 };
                 SharedPreferences.Editor edit = config().edit();
                 for (int i = 0; i < numeric.length; i++) {
                     if (v.has(numeric[i])) {
@@ -444,7 +560,7 @@ public class MainActivity extends Activity {
                 if (cursor != null && cursor.moveToFirst()) label = cursor.getString(0);
             } catch (Exception ignored) { }
             if (label == null || label.isEmpty()) label = "Bài nhạc";
-            if (code == REQUEST_MUSIC_OTHER) startMusic(uri, label);
+            if (code == REQUEST_MUSIC_OTHER) queueSwitchMusic(uri, label, 0);
             else {
                 int slot = code == REQUEST_MUSIC_1 ? 1 : 2;
                 config().edit().putString("song" + slot + "Uri", uri.toString())
@@ -479,7 +595,10 @@ public class MainActivity extends Activity {
 
     @Override protected void onDestroy() {
         pendingMusic = false;
+        pendingResume = false;
+        switchMusicUri = null;
         musicShouldReturnListening = false;
+        listeningRestoreTicket++;
         if (music != null) {
             music.stop(false);
             if (recorder().getBoolean("musicSuspended", false)) sendRecorder("MUSIC_RESUME");

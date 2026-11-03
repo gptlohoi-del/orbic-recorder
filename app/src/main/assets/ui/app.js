@@ -9,15 +9,17 @@
   const specs = [
     {key:'fadeIn', label:'Tăng dần âm lượng đầu bài',unit:'ms',default:3000,min:0,max:30000,step:500,group:'music'},
     {key:'fadeOut',label:'Giảm dần âm lượng cuối bài',unit:'ms',default:5000,min:0,max:30000,step:500,group:'music'},
+    {key:'pauseStopFade',label:'Giảm âm khi PAUSE / STOP nhạc',unit:'ms',default:2000,min:0,max:10000,step:250,hardMin:0,hardMax:15000,group:'music'},
     {key:'musicVolume',label:'Âm lượng phát nhạc',unit:'%',default:80,min:0,max:100,step:5,group:'music'},
     {key:'listenDelay',label:'Trễ trước khi mở micro trở lại',unit:'ms',default:600,min:0,max:5000,step:100,group:'music'},
     {key:'threshold',label:'Ngưỡng phát hiện tiếng động',unit:'dBFS',default:-38,min:-70,max:-10,step:1,hardMin:-80,hardMax:-5,group:'rec'},
     {key:'minSpeech',label:'Thời gian xác nhận có tiếng',unit:'ms',default:180,min:60,max:1000,step:10,hardMin:20,hardMax:2000,group:'rec'},
     {key:'pre',label:'Giữ âm thanh trước tiếng động',unit:'ms',default:1000,min:0,max:5000,step:100,hardMin:0,hardMax:10000,group:'rec'},
     {key:'tail',label:'Giữ âm thanh sau tiếng động',unit:'ms',default:1000,min:100,max:5000,step:100,hardMin:100,hardMax:10000,group:'rec'},
-    {key:'warnSeconds',label:'Cảnh báo khi không có tín hiệu',unit:'giây',default:10000,min:10,max:10000,step:5,hardMin:5,hardMax:10000,group:'rec'},
+    {key:'warnSeconds',label:'Cảnh báo khi không có tín hiệu',unit:'giây',default:9999,min:10,max:9999,step:1,hardMin:5,hardMax:9999,group:'rec'},
     {key:'uiFont',label:'Tỷ lệ kích thước chữ',unit:'%',default:100,min:75,max:160,step:5,group:'view'},
-    {key:'uiOpacity',label:'Độ đậm nền các khung',unit:'%',default:100,min:30,max:100,step:5,group:'view'}
+    {key:'uiOpacity',label:'Độ đậm nền các khung',unit:'%',default:100,min:30,max:100,step:5,group:'view'},
+    {key:'waveHeight',label:'Độ cao vùng sóng âm',unit:'px',default:92,min:45,max:135,step:5,hardMin:30,hardMax:180,group:'view'}
   ];
   const data = {};
   let limits = {};
@@ -26,7 +28,7 @@
   let pendingConfirm = null;
   const bars = [];
   const levels = Array(30).fill(0);
-  for (let i=0;i<30;i++) { const el=document.createElement('i'); el.className='bar'; $('waveform').append(el); bars.push(el); }
+  for (let i=0;i<30;i++) { const el=document.createElement('i'); el.className='bar'; $('waveBars').append(el); bars.push(el); }
   function cap(x,lo,hi){return Math.max(lo,Math.min(hi,x));}
   const rule = spec => limits[spec.key] || {min:spec.min,max:spec.max,step:spec.step,default:spec.default};
   function presentNumber(spec) {
@@ -99,7 +101,8 @@
     if(v==='system')document.documentElement.removeAttribute('data-theme');
     else document.documentElement.dataset.theme=v;
     document.documentElement.style.setProperty('--font-scale',cap(Number(data.uiFont||100),75,160)/100);
-    document.documentElement.style.setProperty('--panel-opacity',cap(Number(data.uiOpacity||100),30,100)/100);
+    document.documentElement.style.setProperty('--panel-opacity',cap(Number(data.uiOpacity??100),30,100)/100);
+    document.documentElement.style.setProperty('--wave-height',cap(Number(data.waveHeight??92),30,180)+'px');
   }
   function openSettings() {
     if (!current)return;
@@ -113,11 +116,8 @@
     renderAdvanced();settingsOpened=true;$('modal').hidden=false;
   }
   function closeSettings(){settingsOpened=false;$('modal').hidden=true;}
-  // Nút Cài đặt cố định ngay trước trạng thái ở góc trên bên phải.
-  const gear=$('settingsToggle');
-  $('status').before(gear);
-  gear.title='Mở cài đặt';
-  gear.onclick=openSettings;
+  // Nút Cài đặt cố định trong Vùng Thông Báo; không kéo thả và không làm mờ.
+  $('settingsToggle').onclick=openSettings;
   $('closeSettings').onclick=$('closeBottom').onclick=$('modalBackdrop').onclick=closeSettings;
   $('theme').onchange=()=>{data.theme=$('theme').value;save({theme:data.theme});applyTheme();};
   $('backupRaw').onchange=()=>save({backupRaw:$('backupRaw').checked});
@@ -132,15 +132,37 @@
   for(const id of ['music1','music2','chooseSong1','chooseSong2','chooseOther','musicPause','musicStop'])
     $(id).onclick=()=>{
       if(id==='musicPause') send(current&&current.musicStatus==='paused'?'musicResume':'musicPause');
-      else send(id);
+      else if((id==='music1'||id==='music2') && current &&
+          current.musicStatus!=='idle') {
+        const song=id==='music1'?'Bài 1':'Bài 2';
+        confirmAction('Chuyển sang '+song+'?',
+          'Bài đang phát sẽ giảm dần âm lượng rồi mới chuyển bài. Bản ghi vẫn được giữ an toàn.',id);
+      } else send(id);
     };
+  function changeThreshold(direction){
+    if(!current)return;
+    const spec=specs.find(s=>s.key==='threshold'),r=rule(spec);
+    const previous=Number(current.threshold??data.threshold??spec.default);
+    const next=cap(previous+direction*r.step,r.min,r.max);
+    data.threshold=current.threshold=next;
+    save({threshold:next});
+    refreshThreshold(next);
+  }
+  $('thresholdMinus').onclick=()=>changeThreshold(-1);
+  $('thresholdPlus').onclick=()=>changeThreshold(1);
+  function refreshThreshold(threshold){
+    const t=Number(threshold);
+    setText('thresholdValue',t+' dBFS');
+    // Recorder uses -60..0 dBFS for its level scale; line and bars share it.
+    const height=cap((t+60)/60*100,3,97);
+    $('thresholdLine').style.top=(100-height)+'%';
+  }
   $('start').onclick=()=>send('start');
   $('pause').onclick=()=>{
     if(current&&current.paused) send('resume');
     else confirmAction('Tạm dừng ghi âm?','Ghi âm sẽ ngừng thủ công và chỉ tiếp tục khi bạn bấm TIẾP TỤC.','pause');
   };
-  $('stop').onclick=()=>confirmAction('Dừng và lưu phiên ghi?','Toàn bộ đoạn đã ghi sẽ được hoàn thiện thành file WAV. Chế độ lắng nghe sẽ dừng.','stop');
-  $('save').onclick=()=>confirmAction('Lưu đoạn ghi hiện tại?','Đoạn hiện tại sẽ được đóng và xuất WAV. Ứng dụng tiếp tục lắng nghe để tự ghi khi có tiếng động.','save');
+  $('stop').onclick=()=>confirmAction('Dừng và lưu phiên ghi?','Toàn bộ âm thanh đã thu sẽ được hoàn tất và lưu WAV. Phiên lắng nghe sẽ dừng nhưng nhạc đang phát vẫn tiếp tục.','stop');
   function confirmAction(title,message,action){
     setText('confirmTitle',title);setText('confirmText',message);pendingConfirm=action;$('confirm').hidden=false;
   }
@@ -154,42 +176,48 @@
         for(const spec of specs)data[spec.key]=d[spec.key]??spec.default;
         data.theme=d.theme||'system';applyTheme();
       }
-      const playing=d.musicStatus!=='idle', changing=!!d.pendingMusic;
+      const playing=d.musicStatus!=='idle', changing=!!d.pendingMusic||!!d.pendingResume;
+      const fading=d.musicStatus==='fadingPause'||d.musicStatus==='fadingStop';
       const stopped=!d.running;
       setText('song1',d.song1Name||'Chưa chọn');setText('song2',d.song2Name||'Chưa chọn');
-      setText('musicState',changing?'Đang chờ tắt micro':d.musicStatus==='playing'?'Đang phát':d.musicStatus==='paused'?'Tạm dừng':d.musicStatus==='loading'?'Đang mở bài':'Đã dừng');
+      setText('musicState',d.pendingResume?'Chờ tắt micro':d.pendingMusic?'Đang chuẩn bị':d.musicStatus==='fadingPause'?'Đang giảm âm để PAUSE':d.musicStatus==='fadingStop'?'Đang giảm âm để STOP':d.musicStatus==='playing'?'Đang phát':d.musicStatus==='paused'?'Tạm dừng':d.musicStatus==='loading'?'Đang mở bài':'Đã dừng');
       setText('nowPlaying',d.musicTitle||'Chưa phát bài nào');
       setText('musicTime',shortTime(d.musicPosition)+' / '+shortTime(d.musicDuration));
       $('progressFill').style.width=(d.musicDuration>0?cap(d.musicPosition/d.musicDuration*100,0,100):0)+'%';
-      $('musicPause').disabled=!playing||d.musicStatus==='loading';
+      $('musicPause').disabled=!playing||d.musicStatus==='loading'||fading||changing;
       $('musicPause').textContent=d.musicStatus==='paused'?'▶ TIẾP':'Ⅱ PAUSE';
       $('musicStop').disabled=!playing&&!changing;
-      $('music1').disabled=$('music2').disabled=$('chooseOther').disabled=playing||changing||!!d.saving;
-      const locked=playing||changing||!!d.musicSuspended;
-      $('start').disabled=!!d.running||!!d.saving||locked||!!d.recovering||!!d.starting;
-      $('pause').disabled=stopped||!!d.saving||locked;
+      $('music1').disabled=$('music2').disabled=changing||!!d.saving||!!d.starting;
+      $('chooseOther').disabled=changing||!!d.saving||!!d.starting;
+      $('music1').classList.toggle('active-song',playing && d.activeSlot===1);
+      $('music2').classList.toggle('active-song',playing && d.activeSlot===2);
+      // Điều khiển ghi âm độc lập với điều khiển nhạc.
+      // Android sẽ giữ micro tắt trong suốt thời gian nhạc phát.
+      $('start').disabled=!!d.running||!!d.saving||!!d.recovering||!!d.starting;
+      $('pause').disabled=stopped||!!d.saving||!!d.starting;
       $('pause').textContent=d.paused?'▶ TIẾP TỤC':'Ⅱ PAUSE';
-      $('save').disabled=stopped||!!d.paused||!!d.saving||locked;
-      $('stop').disabled=stopped||!!d.saving||locked;
-      const status=d.saving?'ĐANG LƯU':playing?'ĐANG PHÁT NHẠC':changing?'ĐỔI CHẾ ĐỘ':d.paused?'TẠM DỪNG':d.running?'ĐANG LẮNG NGHE':'SẴN SÀNG';
-      setText('status',status);
-      setText('capture',d.capture||'Sẵn sàng');
+      $('stop').disabled=stopped||!!d.saving||!!d.starting;
+      setText('capture',d.capture||'Sẵn sàng');setText('recordState',d.paused?'PAUSE':d.running?'Đã START':'Sẵn sàng');
       setText('db',(d.db||'—')+' dBFS');
       setText('elapsed',fmt(d.elapsedMs));setText('kept',fmt(d.keptMs));setText('segments',d.segments||0);
+      setText('noticeMetrics','Tổng '+fmt(d.elapsedMs)+' · Đã giữ '+fmt(d.keptMs)+' · '+(d.savedParts||0)+' file');
       setText('file',d.file||'Chưa có bản ghi');setText('savedParts',(d.savedParts||0)+' đoạn đã lưu');
       setText('folderLabel',d.folder||'Music/OrbicRecorder');
       setText('settingsFolder',d.folder||'Music/OrbicRecorder');
       setText('error',d.error||'');$('error').hidden=!d.error;
-      setText('otaVersion','Giao diện '+(d.otaVersion||'2.0.0'));setText('otaMessage',d.otaMessage||'Chưa kiểm tra');
+      if(d.error) setText('capture','⚠ '+d.error);
+      setText('otaVersion','Giao diện '+(d.otaVersion||'4.0.0'));setText('otaMessage',d.otaMessage||'Chưa kiểm tra');
       $('installOta').disabled=!d.otaAvailable||d.otaStatus!=='available'||d.running||d.saving||playing||changing;
       $('rollback').hidden=!d.canRollback;
-      levels.shift();levels.push(d.running&&!d.paused&&!locked?cap(Number(d.level||0),0,100):0);
-      bars.forEach((bar,i)=>{let v=levels[i];bar.style.height=Math.max(3,Math.round(v*.45))+'px';bar.classList.toggle('hot',v>75);});
+      levels.shift();levels.push(d.running&&!d.paused&&!d.musicAudible&&!changing&&!d.musicSuspended?cap(Number(d.level||0),0,100):0);
+      bars.forEach((bar,i)=>{let v=levels[i];bar.style.height=Math.max(3,v)+'%';bar.classList.toggle('hot',v>75);});
+      if(!settingsOpened) data.threshold=d.threshold??data.threshold;
+      refreshThreshold(d.threshold??-38);
       if(!settingsOpened){
-        for(const key of ['uiFont','uiOpacity','theme']) data[key]=d[key]??data[key];
+        for(const key of ['uiFont','uiOpacity','waveHeight','theme']) data[key]=d[key]??data[key];
         applyTheme();
       }
-    }catch(e){setText('status','MẤT KẾT NỐI ANDROID');}
+    }catch(e){setText('error','MẤT KẾT NỐI ANDROID');$('error').hidden=false;}
   }
   poll();setInterval(poll,220);
 })();

@@ -70,7 +70,7 @@ public class RecorderService extends Service {
                 new Intent(this, RecorderService.class).setAction(paused ? "RESUME" : "PAUSE"), flags);
         return new Notification.Builder(this, CHANNEL)
                 .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-                .setContentTitle("Orbic Recorder v5.1 – Bản ghi an toàn")
+                .setContentTitle("Orbic Recorder v8 – Bản ghi an toàn")
                 .setContentText(stopping ? "Đang hoàn thiện và lưu WAV" : paused ? "Đang tạm dừng" : "Đang thu và lọc âm thanh")
                 .setContentIntent(PendingIntent.getActivity(this, 0,
                         new Intent(this, MainActivity.class), flags))
@@ -86,9 +86,12 @@ public class RecorderService extends Service {
         String action = intent == null ? "" : intent.getAction();
         switch (action) {
             case "START":
+            case "START_HELD":
                 if (!recording && !stopping && !RecordingArchive.isRecovering()) {
                     startForeground(NOTIFICATION_ID, notification());
-                    startCapture();
+                    // START_HELD tạo phiên ghi hợp lệ nhưng TUYỆT ĐỐI không mở micro
+                    // trong lúc nhạc đang phát. MUSIC_RESUME mới mở micro trở lại.
+                    startCapture("START_HELD".equals(action));
                 }
                 break;
             case "STOP":
@@ -110,13 +113,19 @@ public class RecorderService extends Service {
                 break;
             case "MUSIC_PAUSE":
                 if (recording && !stopping) {
+                    boolean alreadyReleased = musicHold &&
+                            state().getBoolean("musicSuspended", false);
                     musicHold = true;
-                    state().edit().putBoolean("musicSuspended", false)
-                            .putString("capture", "ĐANG CHUYỂN SANG PHÁT NHẠC").apply();
+                    // If mic was already released, do not erase the acknowledgement.
+                    if (!alreadyReleased) {
+                        state().edit().putBoolean("musicSuspended", false)
+                                .putString("capture", "ĐANG CHUYỂN SANG PHÁT NHẠC").apply();
+                    }
                 }
                 break;
             case "MUSIC_RESUME":
                 musicHold = false;
+                state().edit().putBoolean("musicSuspended", false).apply();
                 break;
             case "SAVE":
                 if (recording && !stopping && !musicHold) saveRequested = true;
@@ -125,7 +134,7 @@ public class RecorderService extends Service {
                 if (recording && !stopping) {
                     paused = false;
                     state().edit().putBoolean("paused", false)
-                            .putString("capture", "ĐANG CHỜ TIẾNG NÓI").apply();
+                            .putString("capture", musicHold ? "NHẠC ĐANG PHÁT – MICRO TẮT" : "ĐANG CHỜ TIẾNG ĐỘNG").apply();
                     notifyChanged();
                 }
                 break;
@@ -134,26 +143,28 @@ public class RecorderService extends Service {
         return START_NOT_STICKY;
     }
 
-    private void startCapture() {
+    private void startCapture(boolean startHeld) {
         PROCESS_CAPTURING.set(true);
         try {
-            audio = openMicrophone();
-
             SharedPreferences cfg = config();
             String session = RecordingArchive.makeSessionId();
             RecordingArchive.saveSession(this, session, cfg.getString("treeUri", ""),
                     cfg.getString("folderLabel", "Music/OrbicRecorder"));
-            audio.startRecording();
+            // Không lấy quyền AudioRecord nếu phát nhạc đang diễn ra.
+            if (!startHeld) {
+                audio = openMicrophone();
+                audio.startRecording();
+            }
             recording = true;
             paused = false;
             stopping = false;
-            musicHold = false;
+            musicHold = startHeld;
             saveRequested = false;
-            AudioDeviceInfo device = audio.getRoutedDevice();
+            AudioDeviceInfo device = audio == null ? null : audio.getRoutedDevice();
             state().edit().putBoolean("running", true).putBoolean("saving", false)
-                    .putBoolean("paused", false).putBoolean("musicSuspended", false)
+                    .putBoolean("paused", false).putBoolean("musicSuspended", startHeld)
                     .putBoolean("starting", false).putString("error", "")
-                    .putString("capture", "ĐANG CHỜ TIẾNG NÓI")
+                    .putString("capture", startHeld ? "NHẠC ĐANG PHÁT – MICRO TẮT" : "ĐANG CHỜ TIẾNG ĐỘNG")
                     .putString("file", "Đang ghi phiên " + session)
                     .putLong("elapsedMs", 0).putLong("keptMs", 0)
                     .putInt("segments", 0).putInt("savedParts", 0)
@@ -162,7 +173,7 @@ public class RecorderService extends Service {
                     .putString("source", device == null ? "Chưa xác định" :
                             String.valueOf(device.getProductName()) + " (type " + device.getType() + ")")
                     .apply();
-            worker = new Thread(() -> captureLoop(session), "OrbicVoiceWriterV51");
+            worker = new Thread(() -> captureLoop(session), "OrbicVoiceWriterV7");
             worker.start();
         } catch (Exception e) {
             PROCESS_CAPTURING.set(false);
@@ -234,7 +245,7 @@ public class RecorderService extends Service {
         int confirm = Math.max(1, (cfg.getInt("minSpeech", 180) + FRAME_MS - 1) / FRAME_MS);
         int preFrames = Math.max(0, (cfg.getInt("pre", 1000) + FRAME_MS - 1) / FRAME_MS);
         int tailFrames = Math.max(1, (cfg.getInt("tail", 1000) + FRAME_MS - 1) / FRAME_MS);
-        int warnFrames = Math.max(1, cfg.getInt("warnSeconds", 10000) * 1000 / FRAME_MS);
+        int warnFrames = Math.max(1, cfg.getInt("warnSeconds", 9999) * 1000 / FRAME_MS);
         int splitMinutes = cfg.getInt("splitMinutes", 15);
         if (splitMinutes < 1 || splitMinutes > 60) splitMinutes = 15;
         long splitFrames = (long) splitMinutes * 60 * 1000 / FRAME_MS;
@@ -264,6 +275,10 @@ public class RecorderService extends Service {
                             .putInt("level", 0).putString("db", "—")
                             .putString("capture", "ĐANG PHÁT NHẠC – MICRO ĐÃ TẮT").apply();
                     while (recording && musicHold) {
+                        // A second PLAY may arrive before the mic reopens. Re-acknowledge
+                        // the already released mic, instead of timing out on stale state.
+                        if (!state().getBoolean("musicSuspended", false))
+                            state().edit().putBoolean("musicSuspended", true).apply();
                         try { Thread.sleep(40); } catch (InterruptedException ignored) {}
                     }
                     if (!recording) break;
@@ -322,6 +337,8 @@ public class RecorderService extends Service {
 
                 double amp = rms(block);
                 double db = 20 * Math.log10(Math.max(1.0e-9, amp / 32768.0));
+                // Quick threshold +/- is hot-applied while recording (<=100 ms latency).
+                if (elapsed % 5 == 0) threshold = cfg.getInt("threshold", -38);
                 boolean loud = db >= threshold;
                 silence = loud ? 0 : silence + 1;
 

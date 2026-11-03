@@ -1,78 +1,51 @@
-# ORBIC RECORDER v6 — phát nhạc + ghi âm theo tiếng động + OTA
+# ORBIC RECORDER v8 — Full Repo Android APK + OTA
 
-Mã nguồn đầy đủ Android (Java + WebView offline UI), dựa trên Orbic Recorder v5.1. App đã có APK và OTA từ phiên bản gốc; đây là bản **nâng cấp native v6**, không phải một web-wrapper khác.
+Đây là mã nguồn đầy đủ Java/Android + giao diện HTML/CSS/JavaScript ngoại tuyến, phát triển từ Orbic Recorder v7. **Không phải file APK đã biên dịch.** Android SDK/Gradle sẽ được GitHub Actions dùng để tạo APK.
 
-## 1. Chức năng
+## Chức năng và nguyên lý
 
-- Giao diện **OneView không cuộn**: phát nhạc phía trên, ghi theo tiếng động phía dưới; dọc và ngang đều có nút chính trên màn hình. Settings là một hộp nổi **cuộn riêng**.
-- **Bài 1, Bài 2**: chạm biểu tượng thư mục cạnh mỗi bài để chọn tệp trong điện thoại. Tên/địa chỉ tệp được Android lưu lại sau khi khởi động lại. `BÀI KHÁC` để chọn và nghe tạm, không ghi đè hai bài mặc định. Chỉ phát **một bài mỗi lần**, hết bài tự dừng (không lặp/không tự qua bài khác).
-- **Fade In/Fade Out**: áp dụng trực tiếp đến âm lượng MediaPlayer; theo thời gian phát và thời lượng còn lại, không chỉnh âm lượng hệ thống; hỗ trợ cài đặt thời gian, âm lượng nhạc.
-- Khi đang thu và bấm phát nhạc, native recorder **hoàn thiện bộ đệm đang giữ, đồng bộ dữ liệu WAV và giải phóng AudioRecord**. Chỉ khi micro đã tắt thì âm nhạc mới bắt đầu. Sau khi nhạc kết thúc hoặc dừng bằng nút STOP, chờ khoảng trễ cấu hình rồi mở micro lại. Recorder vẫn ở phiên cũ và **chỉ giữ âm thanh khi tiếng động vượt ngưỡng** (VAD), như chế độ ghi âm gốc. Không tự chuyển về chế độ ghi nếu người dùng đã chọn PAUSE thủ công; để tránh hiểu nhầm, chương trình yêu cầu tiếp tục hoặc dừng PAUSE trước khi bấm phát nhạc.
-- Nếu trước lúc phát chưa mở phiên ghi, khi nhạc kết thúc chương trình **tự bắt đầu phiên lắng nghe** nếu có quyền micro. Lần đầu phát có thể yêu cầu cấp quyền micro.
-- Recorder PAUSE, STOP và SAVE có hộp xác nhận. `SAVE` đóng/xuất **đoạn WAV hiện tại và tiếp tục lắng nghe**, `STOP` kết thúc và lưu phiên, `PAUSE` là tạm dừng thủ công chỉ tiếp tục khi bấm `TIẾP TỤC`.
-- Cơ chế cũ vẫn còn: bộ lọc khoảng lặng, giữ trước/sau tiếng động, WAV gốc tùy chọn, chia WAV theo thời gian, xử lý file tạm, tự khôi phục sau sự cố, chọn thư mục xuất WAV. Nghe lại bản ghi gần nhất tại **Cài đặt → Lưu trữ** (cũng dùng cơ chế tạm ngưng micro).
-- SETTINGS học **cách điều khiển** từ Tụng Kinh (nút ±, slider, nhập số, giá trị hiện tại, MIN/MAX/STEP/DEFAULT, nhóm tùy chọn, tự lưu) nhưng dùng thông số đặc thù của Orbic. Dữ liệu cài đặt lưu trong Android `SharedPreferences` (WebView không bật localStorage). Android kiểm tra giới hạn an toàn kể cả khi JavaScript gửi giá trị xấu.
+- **OneView không cuộn**: bỏ tiêu đề dài, phát nhạc phía trên, ghi âm phía dưới; vùng **THÔNG BÁO** sau hàng nút nhạc chứa trạng thái nhạc, trạng thái micro, thời gian/file ghi và nút **⚙ CÀI ĐẶT**. Chỉ bảng Settings cuộn độc lập.
+- **Hai nút ▶ BÀI 1 (trái) / ▶ BÀI 2 (phải)** đối xứng qua giữa. Chọn hai file mặc định từ điện thoại; có thể phát file BÀI KHÁC. Hết bài tự dừng, không tự chuyển bài. Chuyển bài khi đang chơi hỏi xác nhận, bài cũ sẽ fade trước khi chuyển.
+- **PAUSE và STOP nhạc đều có fade**: khi bấm, nhạc **vẫn phát trong thời gian fade** và âm lượng giảm đều về 0; mặc định **2.000 ms**. Nếu còn ít hơn 2 giây, fade được rút ngắn bằng thời lượng còn lại; nếu hết bài tự nhiên thì tự dừng. Cuối fade, PAUSE mới thực sự tạm dừng MediaPlayer, STOP mới đóng player. Thời gian này có trong Settings với MIN/MAX/STEP/DEFAULT, chỉnh số trực tiếp và tự lưu.
+- **Micro không ghi khi nhạc còn phát**, kể cả đang fade về 0. Vẫn thao tác được tất cả lệnh ghi âm hợp lệ khi nhạc phát: **START**, **PAUSE/TIẾP TỤC**, **DỪNG & LƯU**. START trong lúc nhạc phát ghi nhận yêu cầu mở phiên ghi **nhưng không mở micro**, sau khi nhạc hết hoặc thật sự PAUSE thì trở lại nghe tiếng động. Nếu người dùng chưa START thì nhạc tự dừng **không tự kích hoạt phiên ghi**.
+- Nếu đã nhấn **PAUSE ghi âm thủ công**, nhạc dừng vẫn giữ PAUSE cho tới khi người dùng TIẾP TỤC. Nếu **DỪNG & LƯU ghi âm**, WAV được hoàn tất an toàn, phiên thu kết thúc và không ảnh hưởng nhạc. PAUSE và DỪNG & LƯU có xác nhận.
+- Khi **tiếp tục phát nhạc từ PAUSE**, micro đang hoạt động phải giải phóng trước khi phát lại (có chờ xác nhận); nhạc tăng âm nhẹ để tránh giật tiếng. Khi PAUSE nhạc hoàn tất và được phát lại, cơ chế giám sát tiếng động được bảo toàn.
+- **Vạch ngang ngưỡng tiếng động** trên biểu đồ mức dBFS, trùng thang đo với chiều cao các cột. Có nút **− / +** ngay dưới sóng âm; đổi ngưỡng và lưu tức thì, bộ ghi cập nhật trong khoảng 100 ms (khi đang nhận các frame micro bình thường).
+- Settings có **độ cao vùng sóng âm**, độ lớn chữ, chủ đề, fade-in/out của bài, fade khi PAUSE/STOP, thời gian đợi mở lại micro, ngưỡng VAD, các thông số thu, giới hạn nâng cao MIN/MAX/STEP/DEFAULT. **Cảnh báo không tín hiệu mặc định là 9999 giây** (giá trị cũ đã lưu có thể vẫn được sử dụng).
+- Điện thoại có thể **xoay ngược 180°** qua `screenOrientation="fullSensor"`; thay đổi cấu hình khi xoay không khởi tạo lại Activity, tránh ngắt MediaPlayer. Thử trên máy thật vì một số thiết bị có thể khóa xoay của hệ thống.
+- Lọc khoảng lặng và cơ chế WAV/raw/chia file/khôi phục bản ghi kế thừa từ dự án cũ. Nhạc không lọt vào cả file raw WAV vì micro đã giải phóng trong khi nhạc phát.
 
-> Lưu ý: tùy chọn **Lưu WAV gốc** chủ động lưu cả tiếng im lặng, phù hợp làm bản dự phòng. WAV đã lọc mới là bản chỉ lưu đoạn vượt ngưỡng. Ghi âm bằng VAD dựa trên dB không tự phân biệt lời nói với tiếng động khác.
+## Đưa mã nguồn lên GitHub và tạo APK
 
-## 2. Tạo APK trên GitHub mà không cần Release Key
+1. Giải nén **nội dung** thư mục `orbic-recorder-main/` lên thư mục gốc repository `gptlohoi-del/orbic-recorder` (địa chỉ OTA đang cấu hình sẵn). Giữ lại `ota/latest.json` và các file cũ trong `ota/bundles/` trên GitHub; không xóa lịch sử phát hành OTA.
+2. Commit lên nhánh `main`. Vào **Actions → Tạo APK Orbic Recorder (không cần Release Key) → Run workflow**. Workflow cũng chạy sau push mã nguồn.
+3. Tải artifact **`ORBIC-RECORDER-v8-debug`**, giải nén và cài APK trên Android.
 
-1. Giải nén **toàn bộ** mã nguồn vào repository GitHub `gptlohoi-del/orbic-recorder` (hoặc thay cấu hình OTA nếu dùng repo khác), giữ nguyên đường dẫn `app/`, `ota/`, `.github/`, `scripts/`.
-2. GitHub → **Actions** → `Tạo APK Orbic Recorder (không cần Release Key)` → `Run workflow`, hoặc push lên nhánh `main` để tự chạy.
-3. Khi workflow thành công, vào mục **Artifacts** của lần chạy, tải `ORBIC-RECORDER-v6-debug` (APK trong file nén artifact). Cài APK trên Android.
-4. Lần đầu sử dụng cấp quyền micro, vào thư mục chọn hai bài nhạc và chọn thư mục xuất WAV nếu muốn.
+**Phải tạo APK v8 mới lần này** vì mã Java/Android Manifest đã đổi; chạy OTA riêng không cập nhật được các hàm native. APK debug được ký tự động, nhưng khóa ký **có thể thay đổi giữa các lần GitHub build**, khiến không thể cài đè bản debug trước. Nếu dự định dùng lâu dài, nên tạo và lưu an toàn khóa ký Android ổn định, rồi sử dụng workflow build-release có sẵn.
 
-APK dạng **debug-signed** không cần Release Key/Secrets. *Không bảo đảm cập nhật APK khác lần build qua cài chồng*: GitHub runner có thể dùng khóa debug khác; trong trường hợp đó phải gỡ APK cũ trước khi cài APK mới, **hãy sao lưu dữ liệu ghi âm và cài đặt** trước khi gỡ. Để cài chồng APK không mất dữ liệu về lâu dài cần một khóa ký Android cố định. OTA giao diện không phụ thuộc việc cài APK mới.
+## OTA giao diện
 
-`Build Recorder Signed Release APK` vẫn có trong repository như **lựa chọn bổ sung**, chỉ dùng nếu muốn APK ký release cố định và đã tự thiết lập Secrets tương ứng. Không cần cho quy trình debug bên trên.
+- OTA **chỉ cập nhật giao diện `index.html`, `app.css`, `app.js`**, không thay đổi Java, quyền Android hay file APK. `OtaManager` giới hạn và kiểm tra chữ ký RSA trước khi cài. **v8 dùng `nativeApi=4`, giao diện nhúng `4.0.0`**. OTA cũ `nativeApi=3` không tương thích với v8, không được ép cài.
+- Sau khi cài APK v8, chỉnh các file UI trong repo, Commit, vào **Actions → Publish Orbic Recorder OTA → Run workflow**. Script tự tăng số phiên bản: `4.0.1` → `4.0.2` … (hoặc cao hơn nếu GitHub đã có bản mới).
+- GitHub cần Secret **`OTA_SIGNING_KEY_B64`** của RSA private key khớp public key trong `OtaManager.java`. Secret này **khác** khóa ký APK. Nếu không có hoặc không khớp, không thể phát hành OTA hợp lệ; giữ an toàn private key. URL OTA hiện mặc định cho repo `gptlohoi-del/orbic-recorder`; khi đổi repo phải sửa cả URL Java và OWNER/REPO trong `scripts/publish_ota.py` rồi build APK mới.
 
-## 3. OTA đã có sẵn — nay dành cho nativeApi 2
+## File chính
 
-Đây là **OTA giao diện web** có chữ ký số: chỉ `index.html`, `app.css`, `app.js` được tải và cài qua mạng. Java native (MusicPlayer, ghi âm, quyền micro, AndroidManifest, audio-focus) **không thể cập nhật bằng OTA**: phải tạo/cài APK mới khi cần sửa phần đó.
+| File | Vai trò |
+| --- | --- |
+| `app/src/main/assets/ui/index.html` | OneView, vùng thông báo, bố cục nút, ngưỡng tiếng động, Settings |
+| `app/src/main/assets/ui/app.css` | CSS responsive dọc/ngang, bố cục Play đối xứng, sóng âm |
+| `app/src/main/assets/ui/app.js` | Settings số học, điều khiển độc lập, trạng thái, ngưỡng ± |
+| `app/src/main/java/com/example/orbicrecorder/MusicPlayer.java` | Fade PAUSE/STOP với thời gian theo phần nhạc còn lại |
+| `app/src/main/java/com/example/orbicrecorder/MainActivity.java` | WebView bridge, micro handoff, chọn nhạc, cập nhật cấu hình |
+| `app/src/main/java/com/example/orbicrecorder/RecorderService.java` | VAD, đọc ngưỡng theo thời gian thực, WAV, tạm nhường mic |
+| `app/src/main/AndroidManifest.xml` | Xoay 180°, quyền và service |
+| `app/src/main/java/com/example/orbicrecorder/OtaManager.java` | OTA có chữ ký, nativeApi 4 |
+| `.github/workflows/build.yml` | Build APK debug trên GitHub |
+| `.github/workflows/publish-ota.yml` | Tự tăng và phát hành OTA có chữ ký |
 
-**An toàn tương thích:** native API tăng từ `1` lên `2`, giao diện tích hợp sẵn là `2.0.0`. Khi cập nhật APK từ v5.1 lên v6, OTA giao diện đời cũ sẽ bị vô hiệu để không ghi đè UI mới. `ota/latest.json` trong repo ban đầu là bản `1.0.2`/API `1`, do đó app v6 sẽ báo OTA hiện tại chưa tương thích **cho đến khi bạn xuất bản OTA v2 mới**. Đây không phải lỗi ghi âm.
+## Kiểm thử bắt buộc trên điện thoại thật
 
-### Xuất bản OTA mới
+Trước khi dùng cho các bản ghi quan trọng: thử START khi đang phát bài; PAUSE/STOP nhạc khi bài còn nhiều hơn 2 giây và ít hơn 2 giây; xác nhận không có nhạc trong WAV; nhấn PAUSE ghi âm thủ công; DỪNG & LƯU giữa lúc nhạc phát; chuyển bài; xoay ngược 180°; đổi ngưỡng ± khi đang nghe và kiểm tra thay đổi ngưỡng có hiệu lực; thử OTA sau khi cài APK v8.
 
-1. Điều chỉnh file UI trong `app/src/main/assets/ui/`.
-2. Trong repository → **Settings → Secrets and variables → Actions**, thiết lập `OTA_SIGNING_KEY_B64` từ **khóa riêng RSA khớp với public key** đã gắn sẵn trong `OtaManager.java` (nếu trước đó đã cấu hình khóa OTA, giữ nguyên Secret). **Không commit khóa riêng** lên GitHub.
-3. Actions → `Publish Orbic Recorder OTA` → chạy với version `2.0.1` hoặc số lớn hơn (mẫu `N.N.N`, tăng dần). Workflow đóng gói, ký và commit `ota/latest.json`, `ota/bundles/VERSION.zip`.
-4. Mở ứng dụng có Internet, vào **Cài đặt → Cập nhật OTA → Kiểm tra → Cập nhật**. Có thể quay lại giao diện trước qua nút Quay lại (nếu còn bản hợp lệ).
-
-Nếu **không còn khóa riêng RSA** của dự án gốc, phải tạo *cặp khóa OTA mới*, thay `PUBLIC_KEY_B64` bằng public key tương ứng trong Java, thiết lập secret riêng rồi **build và cài APK v6 mới một lần** trước khi OTA hoạt động. Cần lưu ý **khóa ký OTA khác hoàn toàn khóa ký APK**; chỉ khóa OTA là bắt buộc để phát hành OTA có chữ ký.
-
-### Repo khác gptlohoi-del/orbic-recorder?
-
-Hãy sửa cặp đường dẫn URL trong `OtaManager.java` (`MANIFEST_URL`, `BUNDLE_PREFIX`) và biến `OWNER`, `REPO` trong `scripts/publish_ota.py` theo tên repository **public** thực tế. Các URL raw.githubusercontent.com yêu cầu tệp có thể truy cập công khai. APK cần build lại một lần sau khi thay URL. Đừng chỉ đổi tên repository mà giữ nguyên URL cũ.
-
-## 4. Cấu trúc chính
-
-```
-app/src/main/java/com/example/orbicrecorder/
-  MainActivity.java      # WebView bridge, chọn nhạc, điều phối nhạc-micro, settings
-  MusicPlayer.java       # MediaPlayer, audio-focus, fade-in/fade-out, kết thúc bài
-  RecorderService.java   # VAD/WAV; nhường micro cho nhạc và nối lại phiên
-  RecordingArchive.java  # WAV gốc/WAV đã lọc, chia file, khôi phục
-  OtaManager.java        # OTA web đã ký, nativeApi 2, chống OTA cũ
-app/src/main/assets/ui/
-  index.html             # OneView và Settings
-  app.css                # Responsive dọc/ngang
-  app.js                 # Controls, xác nhận, thông số số học, tự lưu
-.github/workflows/
-  build.yml              # Debug APK tự động, không cần release key
-  build-release.yml      # Release APK tùy chọn (cần Secrets)
-  publish-ota.yml        # OTA có chữ ký (cần OTA_SIGNING_KEY_B64)
-scripts/publish_ota.py  # Đóng gói, ký và kiểm tra khóa OTA
-```
-
-## 5. Kiểm thử thiết bị nên thực hiện trước khi dùng thật
-
-- Bật lắng nghe, phát ra tiếng động ngắn rồi kiểm tra WAV đã lọc và WAV gốc; thử SAVE và STOP.
-- Đang có tiếng động → phát Bài 1/Bài 2, xác nhận micro tắt khi nhạc chạy; hết bài, dừng giữa bài, Pause/Resume nhạc, rồi tạo tiếng động mới để kiểm tra ghi tiếp.
-- Thử PAUSE thủ công, cuộc gọi/tai nghe, khóa màn hình, màn hình dọc/ngang và lưu hai bài từ bộ nhớ điện thoại.
-- Đổi MIN/MAX/STEP/DEFAULT; thử giá trị vượt giới hạn an toàn; xác nhận cấu hình tự lưu sau khi đóng mở app.
-- Chạy build GitHub Actions thực tế trước khi phân phối APK. Mã nguồn ở đây đã qua kiểm tra tĩnh; **chưa build Android APK hay chạy trên điện thoại thật** trong môi trường tạo bản ZIP.
-
-## 6. Quyền riêng tư
-
-Chương trình chỉ truy cập micro khi người dùng bắt đầu chế độ lắng nghe hoặc khi tự khởi động lại lắng nghe sau bài nhạc, có yêu cầu cấp quyền Android. Không tải file ghi âm lên máy chủ. Chỉ các file UI được tải từ GitHub dưới dạng OTA đã ký; hai bài nhạc người dùng chọn nằm trên thiết bị.
+Mã nguồn đã được kiểm tra cú pháp JavaScript và qua các test tĩnh. **Chưa biên dịch thành APK và chưa kiểm thử audio/micro trên Android thật trong môi trường này.**
