@@ -300,11 +300,20 @@
     $('thresholdMirrorLine').style.top=((100+height)/2)+'%';
   }
   $('start').onclick=()=>send('start');
+  // $('pause').onclick=()=>{
+  //   if(current&&current.paused) send('resume');
+  //   else confirmAction('Tạm dừng ghi âm?','Ghi âm sẽ ngừng thủ công và chỉ tiếp tục khi bạn bấm TIẾP TỤC.','pause');
+  // };
+
   $('pause').onclick=()=>{
-    if(current&&current.paused) send('resume');
-    else confirmAction('Tạm dừng ghi âm?','Ghi âm sẽ ngừng thủ công và chỉ tiếp tục khi bạn bấm TIẾP TỤC.','pause');
+    if(current && current.paused) {
+      send('resume');
+    } else {
+      send('pause');
+    }
   };
-  $('stop').onclick=()=>confirmAction('Dừng và lưu phiên ghi?','Toàn bộ âm thanh đã thu sẽ được hoàn tất và lưu WAV. Phiên lắng nghe sẽ dừng nhưng nhạc đang phát vẫn tiếp tục.','stop');
+  //$('stop').onclick=()=>confirmAction('Dừng và lưu phiên ghi?','Toàn bộ âm thanh đã thu sẽ được hoàn tất và lưu WAV. Phiên lắng nghe sẽ dừng nhưng nhạc đang phát vẫn tiếp tục.','stop');
+  $('stop').onclick=()=>send('stop');
   // Confirmation requires a real pointer drag across the track.
   // A tap or a partial swipe can NEVER call the native discard action.
   const swipeTrack=$('discardTrack'), swipeThumb=$('discardThumb'), swipeFill=$('swipeFill');
