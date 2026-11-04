@@ -1,7 +1,7 @@
 {
-  "version": "8.0.4",
+  "version": "8.0.5",
   "nativeApi": 8,
-  "sha256": "b53284b8987c7116cea0021adc6348fb72d45330f851e7813204c0c29566f831",
-  "url": "https://raw.githubusercontent.com/gptlohoi-del/orbic-recorder/main/ota/bundles/8.0.4.zip",
-  "signature": "HBjrajJ4V6Pl5AiXuXa2MUQNa1cqrzMx1lIhDxLdwNM5j3RYxPnKIcfCjpYW0/sUL97QRKrDb2FxIWFAJLcTlHC32c14p3aPpsvd1gujK1b+pQh3ym1jEU0ozhrcqT5ulJh7/EQKGPBIn+5jmeDIAMn4fOpXB7bOTWcj9nd9kblUy653af7UhGJKZOMv5ywkLslN+X5Y4/o3sXj1g3fDZNIO3G6+NAD9azO9bnxzubyc2yZ/oBIpgG7MLF0d9uw5ZFEhPYmA2nGBkZeiRDvIllY1irBSfiRPwPKHZxDy+d8g0qOAuxqlat9Nx5UQf3s8dSxaa7ELhqDgpN65GXsSdcNQmndePBdMWQW+fK5dfte0VOxA6A+xZxIWVZurXmfUTpVobBQJ0s4SnNamttyXNn48Y5sniM9NPparabPw5WW/A/2+iwbheGWHhcvgZU+bb7ly4oHPkb3lOL0HnMCniBP2B4qjmMPmM8i4CZOMDohKfTVfb6aGlnRJESIyt6HC"
+  "sha256": "aa874d75e119347c3bb5e762e30237069ae887fcb17c6c5a7a8bce543bbb0417",
+  "url": "https://raw.githubusercontent.com/gptlohoi-del/orbic-recorder/main/ota/bundles/8.0.5.zip",
+  "signature": "hBqwQhm/qvRntH2ayTxBBURFfzYGqRg/JD7i0DdbS6fJ1yBaXUSoCjiWu/Cl6xEPaOOMTIOdjYflNjNjVUb7VsmcYU4YBS6pzf8+UDo7WoE7e4OGrwahTbzE4H23ByILV+cMb3zmj5ahlhcpXU/YaOMUQbf8kFpbcMjCavJ39lIhQ4Wa9CJqgC12lTV5Rz2dwxHUg0Z2j5Z7T2FXudMU4kwxZR12+f+oPOWNeGNDeMwwkHf/8ch0fPCDexEre5UHxo79WFMHRdytOBaE4ahp+HXy9l2W6nA8jv/ekL+jjkcNZZRnwSo8g8heOs7kN9/PCBIlLEOXWDfO/VbxDLMMajn0fAFftlk3wMRdhssZq3UmN6D+0joNi6lnChlasDsL+0XOF62QIM/lfLC/REuUH+o5fpFvUyBxvijLjd5/98SVwPsX4bK9+0hK/KtQzT8SeQ3XlxdPwk3AxESffjI4JEc/B4tDjqBJNtUrc4IRk18q9FKwTSkpjOQ9rVKyrv5l"
 }
