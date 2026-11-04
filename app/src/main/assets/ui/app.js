@@ -382,6 +382,149 @@
   $('confirmCancel').onclick=()=>{$('confirm').hidden=true;pendingConfirm=null;};
   $('confirmYes').onclick=()=>{const action=pendingConfirm;pendingConfirm=null;$('confirm').hidden=true;if(action)send(action);};
 
+  // Archive is read from native Android storage only on demand, never on each
+  // 220-ms waveform poll. Newest WAV is first, even for a custom SAF folder.
+  let recordings=[];
+  let recordingRows=[];
+  let highlightedRecordingId=null;
+  let lastArchivedFile='';
+  let wantedRecordingId='';
+  let movingRecordingSeek=false;
+  function recordingLibrarySupported(){
+    return typeof window.Orbic!=='undefined' &&
+      typeof window.Orbic.recordings==='function' &&
+      typeof window.Orbic.playRecording==='function';
+  }
+  function dateLabel(milliseconds){
+    if(!(Number(milliseconds)>0))return 'Không rõ ngày lưu';
+    try{return new Date(Number(milliseconds)).toLocaleString('vi-VN',{hour12:false});}
+    catch(e){return 'Không rõ ngày lưu';}
+  }
+  function fileSizeLabel(bytes){
+    const n=Number(bytes);
+    if(!Number.isFinite(n)||n<0)return '';
+    return n>=1048576?(n/1048576).toFixed(1)+' MB':Math.max(1,Math.ceil(n/1024))+' KB';
+  }
+  function playRecordingItem(item){
+    if(!item||!recordingLibrarySupported())return;
+    wantedRecordingId=item.id;
+    try {window.Orbic.playRecording(item.id);} catch(e){
+      setText('recordingNow','Không thể mở bản ghi: '+e.message);
+    }
+  }
+  function markActiveRecording(id){
+    if(id===highlightedRecordingId)return;
+    highlightedRecordingId=id;
+    recordingRows.forEach((row,index)=>{
+      const playing=recordings[index].id===id;
+      row.classList.toggle('playing-recording',playing);
+      row.querySelector('button').textContent=playing?'♫':'▶';
+    });
+  }
+  function loadRecordingList(playNewest){
+    const list=$('recordingsList');
+    list.textContent="";recordingRows=[];highlightedRecordingId=null;
+    if(!recordingLibrarySupported()){
+      recordings=[];
+      setText('recordingsCount','Cần cài bản APK mới để xem bản ghi');
+      const empty=document.createElement('p');empty.className='recordings-empty';
+      empty.textContent='Phiên bản Android hiện tại chưa hỗ trợ duyệt WAV. Chỉ cập nhật OTA giao diện là chưa đủ.';
+      list.append(empty);return;
+    }
+    try {
+      const raw=JSON.parse(window.Orbic.recordings());
+      recordings=Array.isArray(raw)?raw.filter(x=>x&&typeof x.id==='string'&&typeof x.name==='string'):[];
+      // Sorting here is a second safeguard for native providers that ignore sort order.
+      recordings.sort((a,b)=>(Number(b.modified)||0)-(Number(a.modified)||0) ||
+          Number(!!a.raw)-Number(!!b.raw) || String(b.name).localeCompare(String(a.name)));
+      setText('recordingsCount',recordings.length+' file WAV · Mới nhất ở đầu danh sách');
+      if(!recordings.length){
+        const empty=document.createElement('p');empty.className='recordings-empty';
+        empty.textContent='Chưa có file WAV đã lưu. Sau khi bấm DỪNG & LƯU, hãy mở lại thư mục hoặc bấm ↻ để làm mới.';
+        list.append(empty);
+      }
+      recordings.forEach((item,index)=>{
+        const row=document.createElement('div');row.className='recording-item';
+        const play=document.createElement('button');play.type='button';play.className='btn outline';
+        play.textContent='▶';play.setAttribute('aria-label','Nghe '+item.name);
+        play.onclick=()=>{
+          if(current&&current.activeRecordingId===item.id&&current.musicStatus==='paused')send('musicResume');
+          else if(current&&current.activeRecordingId===item.id&&current.musicStatus==='playing')send('musicPause');
+          else playRecordingItem(item);
+        };
+        const details=document.createElement('div');details.className='recording-file-details';
+        const name=document.createElement('strong');name.textContent=(index+1)+'. '+item.name;
+        const meta=document.createElement('small');
+        meta.textContent=dateLabel(item.modified)+' · '+(item.raw?'WAV gốc':'WAV đã lọc')+
+          (fileSizeLabel(item.size)?' · '+fileSizeLabel(item.size):'');
+        details.append(name,meta);row.append(play,details);
+        list.append(row);recordingRows.push(row);
+      });
+      markActiveRecording(current?current.activeRecordingId:'');
+      if(playNewest&&recordings.length)playRecordingItem(recordings[0]);
+    }catch(e){
+      recordings=[];
+      setText('recordingsCount','Không đọc được thư mục bản ghi');
+      const empty=document.createElement('p');empty.className='recordings-empty';
+      empty.textContent='Không thể tải danh sách WAV. Kiểm tra quyền truy cập thư mục, sau đó thử bấm ↻.';
+      list.append(empty);
+    }
+  }
+  function showRecordings(playNewest){
+    $('recordingsModal').hidden=false;
+    setText('recordingsFolder',current&&current.folder||'Music/OrbicRecorder');
+    loadRecordingList(playNewest);
+  }
+  function closeRecordings(){
+    $('recordingsModal').hidden=true;
+    // Closing the library must not interrupt a recording or audio playback.
+  }
+  $('openRecordings').onclick=()=>showRecordings(false);
+  $('playNewest').onclick=()=>showRecordings(true);
+  $('refreshRecordings').onclick=()=>loadRecordingList(false);
+  $('closeRecordings').onclick=$('recordingsBackdrop').onclick=closeRecordings;
+  function navigateRecording(delta){
+    const id=(current&&current.activeRecordingId)||wantedRecordingId;
+    const index=recordings.findIndex(x=>x.id===id);
+    if(index<0)return;
+    const next=recordings[index+delta];
+    if(next)playRecordingItem(next);
+  }
+  $('recordingPrevious').onclick=()=>navigateRecording(-1);
+  $('recordingNext').onclick=()=>navigateRecording(1);
+  $('recordingPause').onclick=()=>{
+    if(!current||!current.activeRecordingId)return;
+    send(current.musicStatus==='paused'?'musicResume':'musicPause');
+  };
+  $('recordingStop').onclick=()=>send('musicStop');
+  $('recordingSeek').addEventListener('input',()=>{movingRecordingSeek=true;});
+  $('recordingSeek').addEventListener('change',()=>{
+    if(current&&current.activeRecordingId&&typeof window.Orbic.seekRecording==='function')
+      try{window.Orbic.seekRecording(Number($('recordingSeek').value));}catch(e){console.error(e);}
+    movingRecordingSeek=false;
+  });
+  function updateRecordingPlayer(d){
+    if($('recordingsModal').hidden)return;
+    const id=d.activeRecordingId||'';
+    const playing=!!id&&d.musicStatus!=='idle';
+    const index=recordings.findIndex(x=>x.id===id);
+    markActiveRecording(id);
+    setText('recordingNow',playing?(d.musicTitle||'Đang mở bản ghi'):'Chọn ▶ ở một bản ghi để nghe lại');
+    setText('recordingTime',shortTime(playing?d.musicPosition:0)+' / '+shortTime(playing?d.musicDuration:0));
+    const pause=$('recordingPause');
+    pause.disabled=!playing||d.musicStatus==='loading'||d.musicStatus==='fadingPause'||
+      d.musicStatus==='fadingStop'||d.pendingMusic||d.pendingResume;
+    pause.textContent=d.musicStatus==='paused'?'▶ TIẾP':'Ⅱ PAUSE';
+    $('recordingStop').disabled=!playing&&!d.pendingMusic;
+    $('recordingPrevious').disabled=index<=0||d.pendingMusic||d.pendingResume||d.saving;
+    $('recordingNext').disabled=index<0||index>=recordings.length-1||d.pendingMusic||d.pendingResume||d.saving;
+    const seek=$('recordingSeek');
+    seek.disabled=!playing||d.musicDuration<=0||d.musicStatus==='loading'||
+      d.musicStatus==='fadingPause'||d.musicStatus==='fadingStop';
+    seek.max=Math.max(1,Number(d.musicDuration)||1);
+    if(!movingRecordingSeek)seek.value=Math.max(0,Number(d.musicPosition)||0);
+  }
+
   function poll(){
     try {
       const d=JSON.parse(window.Orbic.snapshot());current=d;
@@ -395,9 +538,11 @@
       const hasSong3=isThirdTrackSupported(d),hasDiscard=isDiscardSupported(d);
       if(discardPending && (stopped || d.saving || d.error ||
           Date.now()-discardRequestedAt>8000)) discardPending=false;
-      setText('featureCompatibility',hasSong3&&hasDiscard
-        ? 'APK đã hỗ trợ 3 bài nhạc, xoay 180° và hủy phiên ghi bằng thao tác vuốt.'
-        : 'Cần cài APK mới để dùng BÀI 3 và DỪNG & KHÔNG LƯU thực sự. Chỉ cập nhật giao diện OTA trên APK cũ là chưa đủ.');
+      const hasArchive=d.supportsRecordingLibrary===true;
+      setText('featureCompatibility',hasSong3&&hasDiscard&&hasArchive
+        ? 'APK hỗ trợ 3 bài nhạc, xoay 180°, hủy phiên ghi và thư viện nghe lại WAV.'
+        : 'Cần cài APK mới để dùng đầy đủ BÀI 3, HỦY và THƯ VIỆN GHI ÂM. Chỉ cập nhật giao diện OTA là chưa đủ.');
+      $('openRecordings').disabled=$('playNewest').disabled=!hasArchive;
       $('music3').textContent=hasSong3?'▶ BÀI 3':'BÀI 3 · APK MỚI';
       $('discard').textContent=hasDiscard?'✕ DỪNG & KHÔNG LƯU':'✕ CẦN APK MỚI ĐỂ HỦY';
       // UI state is persisted by the native APK; older OTA-only APKs use the
@@ -440,11 +585,17 @@
       setText('elapsed',fmt(d.elapsedMs));setText('kept',fmt(d.keptMs));setText('segments',d.segments||0);
       setText('noticeMetrics','Tổng '+fmt(d.elapsedMs)+' · Đã giữ '+fmt(d.keptMs)+' · '+(d.savedParts||0)+' file');
       setText('file',d.file||'Chưa có bản ghi');setText('savedParts',(d.savedParts||0)+' đoạn đã lưu');
+      if(d.file && d.file!==lastArchivedFile){
+        // A freshly exported WAV becomes available after the native file field changes.
+        if(lastArchivedFile && !$('recordingsModal').hidden)loadRecordingList(false);
+        lastArchivedFile=d.file;
+      }
       setText('folderLabel',d.folder||'Music/OrbicRecorder');
       setText('settingsFolder',d.folder||'Music/OrbicRecorder');
+      updateRecordingPlayer(d);
       setText('error',d.error||'');$('error').hidden=!d.error;
       if(d.error) setText('capture','⚠ '+d.error);
-      setText('otaVersion','Giao diện '+(d.otaVersion||'8.0.3'));setText('otaMessage',d.otaMessage||'Chưa kiểm tra');
+      setText('otaVersion','Giao diện '+(d.otaVersion||'8.0.6'));setText('otaMessage',d.otaMessage||'Chưa kiểm tra');
       $('installOta').disabled=!d.otaAvailable||d.otaStatus!=='available'||d.running||d.saving||playing||changing;
       $('rollback').hidden=!d.canRollback;
       levels.shift();levels.push(d.running&&!d.paused&&!d.musicAudible&&!changing&&!d.musicSuspended?cap(Number(d.level||0),0,100):0);

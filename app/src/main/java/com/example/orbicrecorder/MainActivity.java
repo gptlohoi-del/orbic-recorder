@@ -31,7 +31,7 @@ import java.util.Collections;
 
 /** Native recorder from v4 + OTA-updateable local HTML/CSS/JS user interface. */
 public class MainActivity extends Activity {
-    private static final String NATIVE_LABEL = "ORBIC RECORDER v9.5.0";
+    private static final String NATIVE_LABEL = "ORBIC RECORDER v9.5.0 · THƯ VIỆN GHI ÂM";
     private static final String LOCAL_ORIGIN = "https://appassets.androidplatform.net";
     private static final int REQUEST_MIC = 101;
     private static final int REQUEST_FOLDER = 102;
@@ -57,6 +57,8 @@ public class MainActivity extends Activity {
     private String switchMusicName;
     private int switchMusicSlot;
     private int activeSlot;
+    private volatile String activeRecordingId = "";
+    private String switchRecordingId = "";
     private int waitCycles;
 
     private SharedPreferences config() { return getSharedPreferences("config", MODE_PRIVATE); }
@@ -221,9 +223,15 @@ public class MainActivity extends Activity {
     }
 
     private void playLast() {
-        String value = recorder().getString("uri", "");
-        if (value.isEmpty()) { toast("Chưa có bản ghi"); return; }
-        queueSwitchMusic(Uri.parse(value), "Bản ghi gần nhất", 0);
+        RecordingLibrary.Item item = RecordingLibrary.newest(this);
+        if (item == null) { toast("Chưa có bản ghi WAV đã lưu"); return; }
+        playRecording(item);
+    }
+
+    private void playRecording(RecordingLibrary.Item item) {
+        if (item == null) { toast("Không tìm thấy bản ghi trong thư mục lưu"); return; }
+        // Reuse MusicPlayer's audio focus and mic suspension. Never play staging files.
+        queueSwitchMusic(item.uri, item.name, 0, item.uri.toString());
     }
 
     private void chooseMusic(int slot) {
@@ -252,6 +260,10 @@ public class MainActivity extends Activity {
 
     /** All changes of track are faded; mic remains held between consecutive songs. */
     private void queueSwitchMusic(Uri uri, String label, int slot) {
+        queueSwitchMusic(uri, label, slot, "");
+    }
+
+    private void queueSwitchMusic(Uri uri, String label, int slot, String recordingId) {
         if (pendingMusic || pendingResume || recorder().getBoolean("saving", false)) {
             toast("Vui lòng đợi thao tác hiện tại"); return;
         }
@@ -259,9 +271,11 @@ public class MainActivity extends Activity {
             switchMusicUri = uri;
             switchMusicName = label;
             switchMusicSlot = slot;
+            switchRecordingId = recordingId;
             music.requestStop(config().getInt("pauseStopFade", 2000));
         } else {
             activeSlot = slot;
+            activeRecordingId = recordingId;
             startMusic(uri, label);
         }
     }
@@ -304,8 +318,11 @@ public class MainActivity extends Activity {
         pendingMusic = false;
         try {
             SharedPreferences c = config();
+            // Fades meant for songs would hide the beginning/end of short WAV clips.
+            boolean voiceReplay = !activeRecordingId.isEmpty();
             music.play(queuedMusic, queuedMusicName,
-                    c.getInt("fadeIn", 3000), c.getInt("fadeOut", 5000),
+                    voiceReplay ? 0 : c.getInt("fadeIn", 3000),
+                    voiceReplay ? 0 : c.getInt("fadeOut", 5000),
                     c.getInt("musicVolume", 80));
         } catch (Exception e) { toast(e.getMessage()); }
     }
@@ -324,11 +341,14 @@ public class MainActivity extends Activity {
             switchMusicUri = null;
             switchMusicName = null;
             activeSlot = slot;
+            activeRecordingId = switchRecordingId;
+            switchRecordingId = "";
             // Do not release the mic hold between two consecutive tracks.
             startMusic(next, name);
             return;
         }
         activeSlot = 0;
+        activeRecordingId = "";
         if (!musicShouldReturnListening) return;
         musicShouldReturnListening = false;
         scheduleListeningRestore(true);
@@ -375,7 +395,7 @@ public class MainActivity extends Activity {
         }
         if (!p.getBoolean("running", false)) {
             pendingResume = false;
-            music.resume(config().getInt("pauseStopFade", 2000));
+            music.resume(activeRecordingId.isEmpty() ? config().getInt("pauseStopFade", 2000) : 0);
             return;
         }
         if (!holdRequested) {
@@ -385,7 +405,7 @@ public class MainActivity extends Activity {
         }
         if (p.getBoolean("musicSuspended", false)) {
             pendingResume = false;
-            music.resume(config().getInt("pauseStopFade", 2000));
+            music.resume(activeRecordingId.isEmpty() ? config().getInt("pauseStopFade", 2000) : 0);
         } else if (++waitCycles < 90) {
             mainThread.postDelayed(() -> waitForResumeMicRelease(true), 60);
         } else {
@@ -485,8 +505,29 @@ public class MainActivity extends Activity {
                 // destructive/native-only buttons on unsupported old APKs.
                 data.put("supportsThirdTrack", true);
                 data.put("supportsSwipeDiscard", true);
+                data.put("supportsRecordingLibrary", true);
+                data.put("activeRecordingId", activeRecordingId);
             } catch (Exception ignored) { }
             return data.toString();
+        }
+
+        // This only enumerates completed files in the chosen folder and Orbic's default store.
+        // WebView invokes JavascriptInterface methods off the UI thread.
+        @JavascriptInterface public String recordings() {
+            return RecordingLibrary.asJson(MainActivity.this);
+        }
+
+        @JavascriptInterface public void playRecording(String id) {
+            if (id == null || id.length() > 2048) return;
+            // Validate against our own archive before opening a URI provided by JavaScript.
+            RecordingLibrary.Item item = RecordingLibrary.find(MainActivity.this, id);
+            runOnUiThread(() -> MainActivity.this.playRecording(item));
+        }
+
+        @JavascriptInterface public void seekRecording(int positionMs) {
+            runOnUiThread(() -> {
+                if (!activeRecordingId.isEmpty()) music.seekTo(positionMs);
+            });
         }
 
         @JavascriptInterface public void action(String command) {
@@ -501,19 +542,23 @@ public class MainActivity extends Activity {
                     case "music1": playMusic(1); break;
                     case "music2": playMusic(2); break;
                     case "music3": playMusic(3); break;
-                    case "musicPause": music.requestPause(config().getInt("pauseStopFade", 2000)); break;
+                    case "musicPause": music.requestPause(activeRecordingId.isEmpty()
+                            ? config().getInt("pauseStopFade", 2000) : 0); break;
                     case "musicResume": resumeMusicSafely(); break;
                     case "musicStop":
                         switchMusicUri = null;
                         switchMusicName = null;
+                        switchRecordingId = "";
                         if (pendingMusic) {
                             pendingMusic = false;
                             onMusicEnded();
                         } else if (pendingResume) {
                             pendingResume = false;
-                            music.requestStop(config().getInt("pauseStopFade", 2000));
+                            music.requestStop(activeRecordingId.isEmpty()
+                                    ? config().getInt("pauseStopFade", 2000) : 0);
                         } else {
-                            music.requestStop(config().getInt("pauseStopFade", 2000));
+                            music.requestStop(activeRecordingId.isEmpty()
+                                    ? config().getInt("pauseStopFade", 2000) : 0);
                         }
                         break;
                     case "start": startRecording(); break;
@@ -685,6 +730,8 @@ public class MainActivity extends Activity {
         pendingMusic = false;
         pendingResume = false;
         switchMusicUri = null;
+        activeRecordingId = "";
+        switchRecordingId = "";
         musicShouldReturnListening = false;
         listeningRestoreTicket++;
         if (music != null) {

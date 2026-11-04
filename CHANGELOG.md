@@ -1,3 +1,12 @@
+## Giao diện 8.0.6 – Thư viện WAV trong ứng dụng
+
+- Đặt 📁 và ▶ cạnh phải tiêu đề **GHI THEO TIẾNG ĐỘNG**; mở ngay danh sách và nghe bản ghi vừa lưu.
+- Sắp file WAV mới nhất trước, hỗ trợ SAF / Music MediaStore / đường dẫn nội bộ Android 9, phân biệt lọc / gốc.
+- Thêm trình nghe lại với phát, tạm dừng, tiếp, dừng, trước/sau và tua; không tự xóa hoặc can thiệp vào WAV.
+- Bỏ fade nhạc khi nghe WAV ngắn để không mất đầu/cuối câu; tái sử dụng bảo vệ micro từ trình phát nhạc.
+- Giao diện tích hợp tăng từ 8.0.3 lên 8.0.6, vượt OTA 8.0.5 cũ, tránh che khuất tính năng mới.
+- Bắt buộc APK mới; OTA HTML/CSS/JS không tự bổ sung được cầu nối Android native.
+
 # Changelog
 
 ## v9.5.0 — 2026-11-04

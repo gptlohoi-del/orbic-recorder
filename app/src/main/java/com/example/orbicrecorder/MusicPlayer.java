@@ -148,6 +148,18 @@ final class MusicPlayer {
         }
     }
 
+    /** Seek only within a prepared playback; never interfere with an active fade. */
+    void seekTo(int requestedMs) {
+        if (player == null || !("playing".equals(status) || "paused".equals(status))) return;
+        try {
+            int duration = player.getDuration();
+            if (duration <= 0) return;
+            int target = Math.max(0, Math.min(requestedMs, duration - 1));
+            player.seekTo(target);
+            positionMs = target;
+        } catch (IllegalStateException ignored) { }
+    }
+
     void requestPause(int requestedFadeMs) {
         if ("playing".equals(status)) beginFade(false, requestedFadeMs);
     }

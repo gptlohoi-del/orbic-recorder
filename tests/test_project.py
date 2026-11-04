@@ -38,7 +38,7 @@ ET.parse(manifest)
 man = manifest.read_text(encoding='utf-8')
 assert 'screenOrientation="fullSensor"' in man
 assert 'configChanges="orientation|screenSize|smallestScreenSize|keyboardHidden"' in man
-assert 'NATIVE_API = 8' in ota and 'BUILTIN_VERSION = "8.0.3"' in ota
+assert 'NATIVE_API = 8' in ota and 'BUILTIN_VERSION = "8.0.6"' in ota
 assert 'NATIVE_API = 8' in script
 assert 'case "start": startRecording(); break;' in activity
 assert 'music.isBlockingMic() || pendingMusic || pendingResume' in activity
@@ -57,7 +57,7 @@ assert 'void requestPause(int requestedFadeMs)' in music
 assert 'void requestStop(int requestedFadeMs)' in music
 assert 'listener.paused()' in music and 'listener.ended()' in music
 # Returning from PAUSE uses the same configurable time as PAUSE/STOP fade-out.
-assert 'music.resume(config().getInt("pauseStopFade", 2000))' in activity
+assert 'music.resume(activeRecordingId.isEmpty() ? config().getInt("pauseStopFade", 2000) : 0)' in activity
 assert 'void resume(int requestedFadeMs)' in music
 assert 'SystemClock.uptimeMillis()' in music
 assert 'progress * progress * (3f - 2f * progress)' in music

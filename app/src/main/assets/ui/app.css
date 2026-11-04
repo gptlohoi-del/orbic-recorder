@@ -62,3 +62,34 @@ body.software-rotated-180 {
   transform: rotate(180deg);
   transform-origin: 50% 50%;
 }
+
+/* v9.5: two compact shortcuts share the sound-activated recording heading. */
+.record-heading{min-width:0;gap:3px}
+.record-heading>strong{font-size:clamp(9px,2.7vw,11px);white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.record-quick-actions{display:flex;align-items:center;justify-content:flex-end;gap:4px;flex-shrink:0}
+.record-quick-actions #recordState{font-size:9px;max-width:65px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
+.record-quick-button{display:grid;place-items:center;width:30px;height:29px;min-height:29px;padding:0;background:var(--shade);color:var(--ink);border:1px solid var(--border);border-radius:8px;font-size:16px;font-weight:900;flex-shrink:0}
+.record-quick-button:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+.recordings-dialog{max-width:640px;max-height:94dvh;min-height:0}
+.recordings-header-actions{display:flex;gap:5px;flex-shrink:0}
+.recordings-header-actions .btn{min-height:34px;padding:4px 9px}
+.recordings-summary{padding:8px 12px;background:var(--shade);display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--muted);flex-shrink:0}
+#recordingsCount{font-weight:800;color:var(--ink)}
+#recordingsFolder{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.recordings-list{flex:1;min-height:80px;overflow-y:auto;overscroll-behavior:contain;padding:6px 10px}
+.recordings-empty{padding:25px 12px;text-align:center;font-size:12px;color:var(--muted);line-height:1.5}
+.recording-item{display:grid;grid-template-columns:43px minmax(0,1fr);align-items:center;gap:8px;padding:7px 4px;border-bottom:1px solid var(--border)}
+.recording-item.playing-recording{background:var(--shade);border-radius:9px}
+.recording-item>.btn{min-height:37px;font-size:16px}
+.recording-file-details{min-width:0;display:flex;flex-direction:column;gap:3px}
+.recording-file-details strong{font-size:11px;font-weight:750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.recording-file-details small{color:var(--muted);font-size:10px}
+.recording-player{border-top:1px solid var(--border);padding:9px 12px 11px;display:flex;flex-direction:column;gap:7px;flex-shrink:0}
+.recording-now{color:var(--ink);font-size:11px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.recording-timeline{display:flex;align-items:center;gap:9px;min-width:0}
+.recording-timeline input{min-width:0;width:100%;flex:1;accent-color:var(--green);height:22px}
+.recording-timeline span{font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.recording-player-controls{display:grid;grid-template-columns:1fr 1.1fr 1fr .9fr;gap:5px}
+.recording-player-controls .btn{font-size:10px;min-height:36px;min-width:0;padding:4px 2px}
+@media(max-width:355px){.record-quick-actions{gap:2px}.record-quick-actions #recordState{max-width:44px;font-size:8px}.record-quick-button{width:27px;height:27px;min-height:27px}.recordings-dialog .dialog-header{padding:8px}.recordings-dialog .dialog-header h2{font-size:14px}}
+@media(orientation:landscape) and (max-height:510px){.record-quick-button{width:27px;height:25px;min-height:25px}.recordings-dialog{max-height:97dvh}.recordings-list{min-height:40px}}

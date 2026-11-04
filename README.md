@@ -10,7 +10,7 @@
 - **Bật/tắt ngưỡng phát hiện** trong Settings → GHI ÂM: tắt thì lưu cả khung PCM yên lặng, cập nhật khoảng 100 ms khi đang thu. Vẫn không mở mic trong lúc phát nhạc; `PAUSE` vẫn tạm dừng thu. Giữ tùy chọn backup RAW, chia WAV định kỳ, limiter, AGC và 4 kiểu sóng âm.
 - **Điều khiển Android notification:** `PAUSE/TIẾP GHI` và `DỪNG & LƯU` (không bao giờ đặt lệnh hủy file trên notification).
 - **Phát nhạc không đòi cấp quyền mic.** Chỉ `START` ghi âm mới xin `RECORD_AUDIO`.
-- **Cơ chế OTA ký RSA:** chỉ cập nhật HTML/CSS/JS. APK cũ chưa hỗ trợ chức năng native sẽ khóa các nút tương ứng thay vì báo thành công sai. APK v9.5.0 có giao diện nhúng `8.0.3`, không bị OTA `8.0.2` cũ che mất khi nâng cấp; OTA tiếp theo là `8.0.4`.
+- **Cơ chế OTA ký RSA:** chỉ cập nhật HTML/CSS/JS. APK cũ chưa hỗ trợ chức năng native sẽ khóa các nút tương ứng thay vì báo thành công sai. APK có giao diện nhúng `8.0.6`, mới hơn OTA `8.0.5`, để các nút nghe lại bản ghi không bị OTA cũ che mất; OTA tiếp theo tối thiểu là `8.0.7`.
 
 ## Cài lại / cập nhật APK **không mất dữ liệu**
 
@@ -53,3 +53,15 @@ gradle --no-daemon :app:assembleDebug
 ```
 
 CI build APK với `compileSdk 35`, `minSdk 28` (Android 9), `targetSdk 32`, Java 17. **Các test mã nguồn không thay thế thử nghiệm Android 9/10/13 trên thiết bị thật**, nhất là quyền SAF, xóa WAV và nhạc/micro luân phiên. Cần xem `HUONG-DAN-BUILD-OTA-v9.5.0.md` để kiểm thử trước khi phát hành chính thức.
+
+
+## Thư viện nghe lại bản ghi WAV (cập nhật giao diện 8.0.6)
+
+Hai nút nhỏ ở phía phải dòng **🎙 GHI THEO TIẾNG ĐỘNG**:
+
+- **📁**: mở thư viện WAV ngay trong ứng dụng; file mới nhất luôn nằm đầu danh sách; mỗi file có nút nghe, ngày giờ, loại bản ghi (đã lọc/gốc) và dung lượng.
+- **▶**: mở thư viện và tự động phát file WAV mới nhất vừa được lưu, không phải duyệt thủ công.
+
+Trình nghe lại có PAUSE/TIẾP, STOP, TRƯỚC/SAU và tua thời gian. Dùng chung cơ chế nhường micro của trình phát nhạc hiện tại, không thay đổi cách thu hay xoá WAV. Danh sách được làm mới bằng **↻** và tự cập nhật khi app hoàn tất lưu file mới trong khi thư viện đang mở. File WAV được đọc từ thư mục SAF người dùng đã chọn và thư mục dự phòng OrbicRecorder trên Android 9–15 (tối đa 500 file gần nhất). 
+
+**Cần build/cài APK mới:** tính năng đọc danh sách, phát file chọn và tua phụ thuộc Java native mới trong `RecordingLibrary.java` / `MainActivity.java` / `MusicPlayer.java`; chỉ đẩy `app.js/index.html/app.css` qua OTA lên APK cũ sẽ bị khoá hai nút. Xem thêm `README-THU-VIEN-GHI-AM.md`.
