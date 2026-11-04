@@ -75,11 +75,20 @@ public class RecorderService extends Service {
                 new Intent(this, RecorderService.class).setAction(paused ? "RESUME" : "PAUSE"), flags);
         return new Notification.Builder(this, CHANNEL)
                 .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-                .setContentTitle("Orbic Recorder v9 – Bản ghi an toàn")
-                .setContentText(stopping ? "Đang hoàn thiện và lưu WAV" : paused ? "Đang tạm dừng" : "Đang thu và lọc âm thanh")
+                .setContentTitle("Orbic Recorder v9.5 – Bản ghi an toàn")
+                .setContentText(stopping ? "Đang hoàn thiện WAV" : paused ? "Đang tạm dừng" :
+                        musicHold ? "Micro tắt – nhạc đang phát" :
+                                config().getBoolean("thresholdEnabled", true) ?
+                                        "Đang lọc khoảng lặng" : "Đang ghi liên tục")
+                .setOnlyAlertOnce(true)
                 .setContentIntent(PendingIntent.getActivity(this, 0,
                         new Intent(this, MainActivity.class), flags))
                 .setOngoing(true)
+                // An OS notification provides rescue controls even if a WebView
+                // OTA fails or the app is switched to the background.
+                .addAction(android.R.drawable.ic_media_pause,
+                        paused ? "▶ TIẾP GHI" : "Ⅱ PAUSE", toggle)
+                .addAction(android.R.drawable.ic_menu_save, "■ DỪNG & LƯU", stop)
                 .build();
     }
 

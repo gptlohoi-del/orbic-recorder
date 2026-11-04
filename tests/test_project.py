@@ -38,7 +38,7 @@ ET.parse(manifest)
 man = manifest.read_text(encoding='utf-8')
 assert 'screenOrientation="fullSensor"' in man
 assert 'configChanges="orientation|screenSize|smallestScreenSize|keyboardHidden"' in man
-assert 'NATIVE_API = 8' in ota and 'BUILTIN_VERSION = "8.0.0"' in ota
+assert 'NATIVE_API = 8' in ota and 'BUILTIN_VERSION = "8.0.3"' in ota
 assert 'NATIVE_API = 8' in script
 assert 'case "start": startRecording(); break;' in activity
 assert 'music.isBlockingMic() || pendingMusic || pendingResume' in activity
@@ -93,4 +93,4 @@ assert 'edit.putString("waveStyle", waveStyle)' in activity
 assert 'NATIVE_API = 8' in script
 assert 'CẦN CẬP NHẬT APK ĐỂ KIỂM TRA' in js
 assert 'NATIVE_API = 8' in script
-print('PASS: v9.4.2 source, device AGC availability, AGC/limiter, Settings, OTA API, JS syntax')
+print('PASS: v9.5.0 source, device AGC availability, AGC/limiter, Settings, OTA API, JS syntax')

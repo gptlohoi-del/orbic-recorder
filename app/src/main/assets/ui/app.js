@@ -31,6 +31,8 @@
   let current = null;
   let settingsOpened = false;
   let pendingConfirm = null;
+  let discardPending = false;
+  let discardRequestedAt = 0;
   const bars = [];
   const levels = Array(30).fill(0);
   const waveStyles = [
@@ -306,7 +308,7 @@
   // Confirmation requires a real pointer drag across the track.
   // A tap or a partial swipe can NEVER call the native discard action.
   const swipeTrack=$('discardTrack'), swipeThumb=$('discardThumb'), swipeFill=$('swipeFill');
-  let swipePointer=null, swipeStart=0, swipeDistance=0;
+  let swipePointer=null, swipeStart=0, swipeDistance=0, swipeStartedAt=0;
   function resetSwipe(){
     swipePointer=null; swipeDistance=0;
     swipeThumb.style.transform='translateX(0px)';
@@ -315,14 +317,17 @@
   }
   function closeDiscard(){ $('discardModal').hidden=true;resetSwipe(); }
   $('discard').onclick=()=>{
-    if(!current||!current.running||current.saving||current.starting)return;
+    if(!current||!current.running||current.saving||current.starting||
+        discardPending||!isDiscardSupported(current))return;
     resetSwipe();$('discardModal').hidden=false;
   };
   $('cancelDiscard').onclick=$('discardBackdrop').onclick=closeDiscard;
   function maxSwipe(){return Math.max(0,swipeTrack.clientWidth-swipeThumb.offsetWidth-8);}
   swipeThumb.addEventListener('pointerdown',e=>{
     if(swipePointer!==null||$('discardModal').hidden)return;
+    if(e.pointerType==='mouse' && e.button!==0)return;
     swipePointer=e.pointerId;swipeStart=e.clientX;swipeDistance=0;
+    swipeStartedAt=Date.now();
     swipeTrack.classList.add('dragging');
     swipeThumb.setPointerCapture(e.pointerId);
     e.preventDefault();
@@ -340,14 +345,28 @@
   });
   swipeThumb.addEventListener('pointerup',e=>{
     if(e.pointerId!==swipePointer)return;
-    const completed=maxSwipe()>0 && swipeDistance>=maxSwipe()*.92;
+    // Full purposeful swipe (not a tap or accidental rapid touch).
+    const completed=maxSwipe()>0 && swipeDistance>=maxSwipe()*.92 &&
+        Date.now()-swipeStartedAt>=180;
     resetSwipe();
-    if(completed && current && current.running && !current.saving && !current.starting){
+    if(completed && current && current.running && !current.saving &&
+        !current.starting && !discardPending && isDiscardSupported(current)){
       $('discardModal').hidden=true;
+      discardPending=true;
+      discardRequestedAt=Date.now();
       send('discard');
     }
   });
   swipeThumb.addEventListener('pointercancel',resetSwipe);
+  function isThirdTrackSupported(d){
+    // v9.4.2 in the user's earlier source already implemented song 3.
+    return !!d && (d.supportsThirdTrack===true ||
+        /^ORBIC RECORDER v9\.4\.2(?:$|\.)/.test(d.nativeLabel||''));
+  }
+  function isDiscardSupported(d){
+    return !!d && (d.supportsSwipeDiscard===true ||
+        /^ORBIC RECORDER v9\.4\.2(?:$|\.)/.test(d.nativeLabel||''));
+  }
   function confirmAction(title,message,action){
     setText('confirmTitle',title);setText('confirmText',message);pendingConfirm=action;$('confirm').hidden=false;
   }
@@ -364,6 +383,14 @@
       const playing=d.musicStatus!=='idle', changing=!!d.pendingMusic||!!d.pendingResume;
       const fading=d.musicStatus==='fadingPause'||d.musicStatus==='fadingStop';
       const stopped=!d.running;
+      const hasSong3=isThirdTrackSupported(d),hasDiscard=isDiscardSupported(d);
+      if(discardPending && (stopped || d.saving || d.error ||
+          Date.now()-discardRequestedAt>8000)) discardPending=false;
+      setText('featureCompatibility',hasSong3&&hasDiscard
+        ? 'APK đã hỗ trợ 3 bài nhạc, xoay 180° và hủy phiên ghi bằng thao tác vuốt.'
+        : 'Cần cài APK mới để dùng BÀI 3 và DỪNG & KHÔNG LƯU thực sự. Chỉ cập nhật giao diện OTA trên APK cũ là chưa đủ.');
+      $('music3').textContent=hasSong3?'▶ BÀI 3':'BÀI 3 · APK MỚI';
+      $('discard').textContent=hasDiscard?'✕ DỪNG & KHÔNG LƯU':'✕ CẦN APK MỚI ĐỂ HỦY';
       // UI state is persisted by the native APK; older OTA-only APKs use the
       // button's own CSS fallback state and must not have it overwritten.
       if(typeof d.uiRotated180==='boolean'){
@@ -378,7 +405,9 @@
       $('musicPause').disabled=!playing||d.musicStatus==='loading'||fading||changing;
       $('musicPause').textContent=d.musicStatus==='paused'?'▶ TIẾP':'Ⅱ PAUSE';
       $('musicStop').disabled=!playing&&!changing;
-      $('music1').disabled=$('music2').disabled=$('music3').disabled=changing||!!d.saving||!!d.starting;
+      $('music1').disabled=$('music2').disabled=changing||!!d.saving||!!d.starting;
+      $('music3').disabled=!hasSong3||changing||!!d.saving||!!d.starting;
+      $('chooseSong3').disabled=!hasSong3||changing||!!d.saving||!!d.starting;
       $('chooseOther').disabled=changing||!!d.saving||!!d.starting;
       $('music1').classList.toggle('active-song',playing && d.activeSlot===1);
       $('music2').classList.toggle('active-song',playing && d.activeSlot===2);
@@ -389,7 +418,7 @@
       $('pause').disabled=stopped||!!d.saving||!!d.starting;
       $('pause').textContent=d.paused?'▶ TIẾP TỤC':'Ⅱ PAUSE';
       $('stop').disabled=stopped||!!d.saving||!!d.starting;
-      $('discard').disabled=stopped||!!d.saving||!!d.starting;
+      $('discard').disabled=!hasDiscard||stopped||!!d.saving||!!d.starting||discardPending;
       if(!stopped && d.saving && !$('discardModal').hidden)closeDiscard();
       if(stopped && !$('discardModal').hidden)closeDiscard();
       // Native APK v9.1+ provides a device-level AGC availability flag even before START.
@@ -406,7 +435,7 @@
       setText('settingsFolder',d.folder||'Music/OrbicRecorder');
       setText('error',d.error||'');$('error').hidden=!d.error;
       if(d.error) setText('capture','⚠ '+d.error);
-      setText('otaVersion','Giao diện '+(d.otaVersion||'8.0.0'));setText('otaMessage',d.otaMessage||'Chưa kiểm tra');
+      setText('otaVersion','Giao diện '+(d.otaVersion||'8.0.3'));setText('otaMessage',d.otaMessage||'Chưa kiểm tra');
       $('installOta').disabled=!d.otaAvailable||d.otaStatus!=='available'||d.running||d.saving||playing||changing;
       $('rollback').hidden=!d.canRollback;
       levels.shift();levels.push(d.running&&!d.paused&&!d.musicAudible&&!changing&&!d.musicSuspended?cap(Number(d.level||0),0,100):0);

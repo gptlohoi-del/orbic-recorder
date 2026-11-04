@@ -33,7 +33,7 @@ import java.util.zip.ZipInputStream;
  */
 public final class OtaManager {
     public static final int NATIVE_API = 8;
-    public static final String BUILTIN_VERSION = "8.0.0";
+    public static final String BUILTIN_VERSION = "8.0.3";
     private static final String MANIFEST_URL =
             "https://raw.githubusercontent.com/gptlohoi-del/orbic-recorder/main/ota/latest.json";
     private static final String BUNDLE_PREFIX =
@@ -71,7 +71,13 @@ public final class OtaManager {
     public String getMessage() { return message; }
     public String getOfferedVersion() { return offeredVersion; }
     public boolean isBusy() { return busy; }
-    public boolean canRollback() { return preferences.contains("previous"); }
+    public boolean canRollback() {
+        if (!preferences.contains("previous")) return false;
+        String candidate = preferences.getString("previous", BUILTIN_VERSION);
+        return !newer(BUILTIN_VERSION, candidate) &&
+                (BUILTIN_VERSION.equals(candidate) ||
+                        versionValid(candidate) && allPresent(bundleDir(candidate)));
+    }
 
     private void report(String next, String description) {
         status = next;
@@ -158,17 +164,25 @@ public final class OtaManager {
     }
 
     private void validateActiveBundle() {
-        // APK v9.2 adds native persistence for waveform style selection. Never load an old OTA
-        // retained across an Android APK upgrade.
+        // Upgrading the signed APK must not re-enable an older cached OTA UI.
+        // Keep valid OTA versions NEWER than this APK's bundled interface.
         if (preferences.getInt("nativeApi", 1) != NATIVE_API) {
             preferences.edit().putString("active", BUILTIN_VERSION).putInt("nativeApi", NATIVE_API)
                     .remove("previous").apply();
         }
         String current = getActiveVersion();
         if (!BUILTIN_VERSION.equals(current) &&
-                (!versionValid(current) || !allPresent(bundleDir(current)))) {
+                (!versionValid(current) || !newer(current, BUILTIN_VERSION) ||
+                        !allPresent(bundleDir(current)))) {
             preferences.edit().putString("active", BUILTIN_VERSION).remove("previous").apply();
-            report("fallback", "Gói cập nhật không đầy đủ, đã dùng giao diện gốc");
+            report("fallback", "Đã chuyển sang giao diện mới tích hợp trong APK");
+        }
+        // A rollback below the APK's built-in version would undo its fixes.
+        String previous = preferences.getString("previous", "");
+        if (!previous.isEmpty() && (newer(BUILTIN_VERSION, previous) ||
+                !versionValid(previous) ||
+                (!BUILTIN_VERSION.equals(previous) && !allPresent(bundleDir(previous))))) {
+            preferences.edit().remove("previous").apply();
         }
     }
 
@@ -265,7 +279,8 @@ public final class OtaManager {
     public boolean rollback() {
         if (busy || !preferences.contains("previous")) return false;
         String old = preferences.getString("previous", BUILTIN_VERSION);
-        if (!BUILTIN_VERSION.equals(old) && (!versionValid(old) || !allPresent(bundleDir(old)))) {
+        if (newer(BUILTIN_VERSION, old) ||
+                !BUILTIN_VERSION.equals(old) && (!versionValid(old) || !allPresent(bundleDir(old))) {
             report("error", "Không tìm thấy bản giao diện trước");
             return false;
         }

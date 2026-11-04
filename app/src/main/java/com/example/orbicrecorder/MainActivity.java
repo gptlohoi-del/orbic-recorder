@@ -31,7 +31,7 @@ import java.util.Collections;
 
 /** Native recorder from v4 + OTA-updateable local HTML/CSS/JS user interface. */
 public class MainActivity extends Activity {
-    private static final String NATIVE_LABEL = "ORBIC RECORDER v9.4.2";
+    private static final String NATIVE_LABEL = "ORBIC RECORDER v9.5.0";
     private static final String LOCAL_ORIGIN = "https://appassets.androidplatform.net";
     private static final int REQUEST_MIC = 101;
     private static final int REQUEST_FOLDER = 102;
@@ -39,7 +39,6 @@ public class MainActivity extends Activity {
     private static final int REQUEST_MUSIC_2 = 202;
     private static final int REQUEST_MUSIC_OTHER = 203;
     private static final int REQUEST_MUSIC_3 = 205;
-    private static final int REQUEST_MIC_MUSIC = 204;
     private final Handler mainThread = new Handler(Looper.getMainLooper());
     private WebView web;
     // Native View rotation works even when the device refuses reverse portrait/landscape.
@@ -268,12 +267,8 @@ public class MainActivity extends Activity {
     }
 
     private void startMusic(Uri uri, String label) {
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            queuedMusic = uri;
-            queuedMusicName = label;
-            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQUEST_MIC_MUSIC);
-            return;
-        }
+        // Listening to a file does NOT need microphone permission. Only START
+        // requests RECORD_AUDIO. This keeps music usable before permission grant.
         if (music.isActive() || pendingMusic || pendingResume || recorder().getBoolean("saving", false)
                 || recorder().getBoolean("starting", false)) {
             toast("Không thể phát khi đang xử lý âm thanh"); return;
@@ -486,6 +481,10 @@ public class MainActivity extends Activity {
                 data.put("nativeApi", OtaManager.NATIVE_API);
                 data.put("nativeLabel", NATIVE_LABEL);
                 data.put("uiRotated180", webRotated180);
+                // Capability negotiation allows HTML OTA to avoid displaying
+                // destructive/native-only buttons on unsupported old APKs.
+                data.put("supportsThirdTrack", true);
+                data.put("supportsSwipeDiscard", true);
             } catch (Exception ignored) { }
             return data.toString();
         }
@@ -631,10 +630,6 @@ public class MainActivity extends Activity {
         if (code == REQUEST_MIC) {
             if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) startRecording();
             else toast("Cần cấp quyền micro để ghi âm");
-        } else if (code == REQUEST_MIC_MUSIC) {
-            if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED
-                    && queuedMusic != null) startMusic(queuedMusic, queuedMusicName);
-            else toast("Cần quyền micro để tự quay lại lắng nghe sau khi phát nhạc");
         }
     }
 

@@ -13,3 +13,7 @@ local.properties
 *.pfx
 *keystore*.b64
 *keystore*.base64
+
+# Local test artifacts
+__pycache__/
+*.pyc
