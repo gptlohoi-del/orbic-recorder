@@ -34,6 +34,6 @@ assert 'removeFromMediaStore(context, prefix)' in archive
 assert 'removeFromChosenFolder(context, session, prefix)' in archive
 assert 'restore.remove("priorUri")' in archive
 assert 'public static final int NATIVE_API = 8;' in ota
-assert 'public static final String BUILTIN_VERSION = "8.0.7";' in ota
-assert 'versionCode (150000 + githubRunNumber)' in (root/'app/build.gradle').read_text()
+assert 'public static final String BUILTIN_VERSION = "8.0.8";' in ota
+assert 'versionCode (160000 + githubRunNumber)' in (root/'app/build.gradle').read_text()
 print('PASS: backward compatibility for v9.4.2 reliable rotation, 3 tracks, swipe confirm, crash-safe session discard, OTA boundary')

@@ -231,6 +231,12 @@
     for(const key of ['agcEnabled','limiterEnabled','overloadWarn']) $(key).checked=current[key]!==false;
     setText('agcStatus',current.agcStatus||'Chưa khởi động micro');
     $('splitMinutes').value=String(coalesce(current.splitMinutes,60));
+    const supportsAutoOta=typeof current.autoOtaEnabled==='boolean';
+    $('autoOtaEnabled').disabled=!supportsAutoOta;
+    $('autoOtaEnabled').checked=supportsAutoOta?current.autoOtaEnabled:false;
+    setText('autoOtaHelp',supportsAutoOta
+      ? 'Mặc định BẬT. Tự kiểm tra khi mở ứng dụng; chỉ cập nhật khi không ghi âm, lưu WAV hoặc phát nhạc. Nếu bận, OTA sẽ chờ đến lúc rảnh.'
+      : 'Cần cài APK mới có hỗ trợ tự động OTA. Chỉ cập nhật giao diện không thể thêm chức năng Android này.');
     renderAdvanced();settingsOpened=true;$('modal').hidden=false;
   }
   function closeSettings(){settingsOpened=false;$('modal').hidden=true;}
@@ -239,6 +245,12 @@
   $('closeSettings').onclick=$('closeBottom').onclick=$('modalBackdrop').onclick=closeSettings;
   $('theme').onchange=()=>{data.theme=$('theme').value;save({theme:data.theme});applyTheme();};
   $('backupRaw').onchange=()=>save({backupRaw:$('backupRaw').checked});
+  $('autoOtaEnabled').onchange=()=>{
+    if(!current || typeof current.autoOtaEnabled!=='boolean')return;
+    current.autoOtaEnabled=$('autoOtaEnabled').checked;
+    save({autoOtaEnabled:current.autoOtaEnabled});
+    setText('saveStatus',current.autoOtaEnabled?'Đã bật tự động cập nhật OTA':'Đã tắt tự động cập nhật OTA');
+  };
   $('thresholdEnabled').onchange=()=>{
     if(!current || typeof current.thresholdEnabled!=='boolean')return;
     const enabled=$('thresholdEnabled').checked;
@@ -602,7 +614,12 @@
       updateRecordingPlayer(d);
       setText('error',d.error||'');$('error').hidden=!d.error;
       if(d.error) setText('capture','⚠ '+d.error);
-      setText('otaVersion','Giao diện '+(d.otaVersion||'8.0.7'));setText('otaMessage',d.otaMessage||'Chưa kiểm tra');
+      setText('otaVersion','Giao diện '+(d.otaVersion||'8.0.8'));setText('otaMessage',d.otaMessage||'Chưa kiểm tra');
+      if(!settingsOpened){
+        const supportsAutoOta=typeof d.autoOtaEnabled==='boolean';
+        $('autoOtaEnabled').disabled=!supportsAutoOta;
+        $('autoOtaEnabled').checked=supportsAutoOta && d.autoOtaEnabled;
+      }
       $('installOta').disabled=!d.otaAvailable||d.otaStatus!=='available'||d.running||d.saving||playing||changing;
       $('rollback').hidden=!d.canRollback;
       levels.shift();levels.push(d.running&&!d.paused&&!d.musicAudible&&!changing&&!d.musicSuspended?cap(Number(d.level||0),0,100):0);

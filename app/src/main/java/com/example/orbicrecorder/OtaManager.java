@@ -33,7 +33,7 @@ import java.util.zip.ZipInputStream;
  */
 public final class OtaManager {
     public static final int NATIVE_API = 8;
-    public static final String BUILTIN_VERSION = "8.0.7";
+    public static final String BUILTIN_VERSION = "8.0.8";
     private static final String MANIFEST_URL =
             "https://raw.githubusercontent.com/gptlohoi-del/orbic-recorder/main/ota/latest.json";
     private static final String BUNDLE_PREFIX =
@@ -71,6 +71,19 @@ public final class OtaManager {
     public String getMessage() { return message; }
     public String getOfferedVersion() { return offeredVersion; }
     public boolean isBusy() { return busy; }
+    /** User preference is retained across signed UI updates and APK upgrades. */
+    public boolean isAutoUpdateEnabled() {
+        return preferences.getBoolean("autoUpdate", true);
+    }
+    public void setAutoUpdateEnabled(boolean enabled) {
+        preferences.edit().putBoolean("autoUpdate", enabled).apply();
+    }
+    /** A rejected/rolled-back version must not be applied again automatically. */
+    public boolean canAutoInstall() {
+        return isAutoUpdateEnabled() && !busy && "available".equals(status)
+                && offeredManifest != null && !offeredVersion.isEmpty()
+                && !offeredVersion.equals(preferences.getString("autoSkippedVersion", ""));
+    }
     public boolean canRollback() {
         if (!preferences.contains("previous")) return false;
         String candidate = preferences.getString("previous", BUILTIN_VERSION);
@@ -217,7 +230,12 @@ public final class OtaManager {
                 if (newer(version, getActiveVersion())) {
                     offeredManifest = manifest;
                     offeredVersion = version;
-                    report("available", "Có giao diện mới v" + version + ". Nhấn CẬP NHẬT OTA để cài.");
+                    String hint = version.equals(preferences.getString("autoSkippedVersion", ""))
+                            ? "Bạn đã quay về bản trước: bản này không tự cài lại. Có thể cập nhật thủ công."
+                            : isAutoUpdateEnabled()
+                                    ? "Sẽ tự cập nhật khi không ghi âm, lưu WAV hoặc phát nhạc."
+                                    : "Nhấn CẬP NHẬT để cài thủ công.";
+                    report("available", "Có giao diện mới v" + version + ". " + hint);
                 } else {
                     offeredManifest = null;
                     offeredVersion = "";
@@ -262,7 +280,10 @@ public final class OtaManager {
                 deleteRecursive(target);
                 if (!staging.renameTo(target)) throw new IOException("Không kích hoạt được thư mục OTA");
                 String previous = getActiveVersion();
-                preferences.edit().putString("previous", previous).putString("active", version).commit();
+                if (!preferences.edit().putString("previous", previous)
+                        .putString("active", version).remove("autoSkippedVersion").commit()) {
+                    throw new IOException("Không lưu được trạng thái OTA");
+                }
                 offeredVersion = "";
                 offeredManifest = null;
                 report("installed", "Đã cập nhật giao diện OTA v" + version);
@@ -285,7 +306,10 @@ public final class OtaManager {
             report("error", "Không tìm thấy bản giao diện trước");
             return false;
         }
-        preferences.edit().putString("active", old).remove("previous").apply();
+        // Suppress automatic reinstallation of a version the user rolled back.
+        String rejectedVersion = getActiveVersion();
+        preferences.edit().putString("active", old).remove("previous")
+                .putString("autoSkippedVersion", rejectedVersion).apply();
         offeredManifest = null;
         offeredVersion = "";
         report("rolledback", "Đã quay về phiên bản giao diện " + old);

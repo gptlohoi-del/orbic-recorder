@@ -1,3 +1,13 @@
+## v9.5.1 – Tự động OTA an toàn (2026-11-05)
+
+- Trong Settings → CẬP NHẬT OTA, thêm công tắc **TỰ ĐỘNG CẬP NHẬT OTA**, mặc định BẬT, tự lưu trong Android.
+- Giữ kiểm tra OTA trên GitHub khi mở app; tự cài bản OTA mới hơn, có chữ ký và SHA256 đúng, nếu ứng dụng rảnh.
+- Không cài khi đang ghi/khởi động ghi/lưu WAV/khôi phục hoặc phát nhạc; khi đang bận, thử cài lúc rảnh (kiểm tra nội bộ 3 giây/lần khi foreground).
+- Chặn nút phát nhạc/WAV mở khi đang áp dụng OTA để tránh xung đột chuyển giao diện.
+- Sau khi người dùng quay lại bản trước, không tự cài lại cùng một bản OTA đã quay lại; cập nhật thủ công hoặc phiên bản mới hơn vẫn có thể thực hiện.
+- Phiên bản native 9.5.1, `versionCode=160000+GITHUB_RUN_NUMBER` để ưu tiên cài đè bản 9.5.0; giữ `minSdk=28`, `applicationId`, `nativeApi=8`, public key OTA, và các bundle đã phát hành. Tăng giao diện tích hợp thành 8.0.8; OTA phát hành mới bắt đầu 8.0.9.
+- Không cung cấp APK ký sẵn; phải build và cài APK native mới một lần. Không có cơ chế cập nhật APK tự động qua OTA.
+
 ## Giao diện 8.0.7 – Tùy chỉnh theo yêu cầu (2026-11-05)
 
 - Giữ lại tiêu đề Android `ORBIC RECORDER`, bỏ tiêu đề HTML trùng và đặt XOAY 180° cùng hàng PHÁT NHẠC.

@@ -31,7 +31,7 @@ import java.util.Collections;
 
 /** Native recorder from v4 + OTA-updateable local HTML/CSS/JS user interface. */
 public class MainActivity extends Activity {
-    private static final String NATIVE_LABEL = "ORBIC RECORDER v9.5.0 · THƯ VIỆN GHI ÂM";
+    private static final String NATIVE_LABEL = "ORBIC RECORDER v9.5.1 · TỰ ĐỘNG OTA";
     private static final String LOCAL_ORIGIN = "https://appassets.androidplatform.net";
     private static final int REQUEST_MIC = 101;
     private static final int REQUEST_FOLDER = 102;
@@ -60,6 +60,15 @@ public class MainActivity extends Activity {
     private volatile String activeRecordingId = "";
     private String switchRecordingId = "";
     private int waitCycles;
+    private boolean otaForeground;
+    private String lastOtaStatusObserved = "";
+    private final Runnable autoOtaRetry = new Runnable() {
+        @Override public void run() {
+            if (!otaForeground) return;
+            maybeInstallAutoOta();
+            mainThread.postDelayed(this, 3000L);
+        }
+    };
 
     private SharedPreferences config() { return getSharedPreferences("config", MODE_PRIVATE); }
     private SharedPreferences recorder() { return getSharedPreferences("state", MODE_PRIVATE); }
@@ -75,10 +84,17 @@ public class MainActivity extends Activity {
             @Override public void paused() { onMusicPaused(); }
         });
         ota = new OtaManager(this, () -> mainThread.post(() -> {
-            if (web != null && ("installed".equals(ota.getStatus()) || "rolledback".equals(ota.getStatus()))) {
-                web.clearCache(true);
-                web.loadUrl(LOCAL_ORIGIN + "/index.html");
+            String status = ota.getStatus();
+            // The worker notifies when status changes AND when it releases its busy
+            // flag. Reload once per transition, not twice for the same update.
+            if (!status.equals(lastOtaStatusObserved)) {
+                lastOtaStatusObserved = status;
+                if (web != null && ("installed".equals(status) || "rolledback".equals(status))) {
+                    web.clearCache(true);
+                    web.loadUrl(LOCAL_ORIGIN + "/index.html");
+                }
             }
+            maybeInstallAutoOta();
         }));
         if (!RecorderService.isProcessCapturing()) {
             // Stale SharedPreferences flags can survive an abrupt process kill.
@@ -96,6 +112,30 @@ public class MainActivity extends Activity {
         }
         // Check quietly on app opening; recording itself does not need Internet.
         ota.check();
+    }
+
+    /** Only foreground auto updates. Never replace UI during a recording/save or playback. */
+    private void maybeInstallAutoOta() {
+        if (!otaForeground || ota == null || !ota.canAutoInstall()) return;
+        SharedPreferences state = recorder();
+        if (captureActive() || state.getBoolean("starting", false)
+                || RecorderService.isProcessCapturing() || RecordingArchive.isRecovering()
+                || music == null || music.isActive() || pendingMusic || pendingResume
+                || state.getBoolean("musicSuspended", false)) return;
+        ota.install();
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        otaForeground = true;
+        mainThread.removeCallbacks(autoOtaRetry);
+        mainThread.post(autoOtaRetry);
+    }
+
+    @Override protected void onPause() {
+        otaForeground = false;
+        mainThread.removeCallbacks(autoOtaRetry);
+        super.onPause();
     }
 
     private static boolean detectAgcSupport() {
@@ -264,6 +304,9 @@ public class MainActivity extends Activity {
     }
 
     private void queueSwitchMusic(Uri uri, String label, int slot, String recordingId) {
+        if (ota.isBusy() && "downloading".equals(ota.getStatus())) {
+            toast("Đang áp dụng OTA, vui lòng phát nhạc sau khi cập nhật xong"); return;
+        }
         if (pendingMusic || pendingResume || recorder().getBoolean("saving", false)) {
             toast("Vui lòng đợi thao tác hiện tại"); return;
         }
@@ -494,6 +537,7 @@ public class MainActivity extends Activity {
                 data.put("backupRaw", cfg.getBoolean("backupRaw", false));
                 data.put("splitMinutes", cfg.getInt("splitMinutes", 60));
                 data.put("theme", cfg.getString("theme", "system"));
+                data.put("autoOtaEnabled", ota.isAutoUpdateEnabled());
                 data.put("otaStatus", ota.getStatus());
                 data.put("otaMessage", ota.getMessage());
                 data.put("otaAvailable", ota.getOfferedVersion());
@@ -645,6 +689,11 @@ public class MainActivity extends Activity {
                     edit.putString("waveStyle", waveStyle);
                 }
                 if (v.has("backupRaw")) edit.putBoolean("backupRaw", v.getBoolean("backupRaw"));
+                if (v.has("autoOtaEnabled")) {
+                    boolean enabled = v.getBoolean("autoOtaEnabled");
+                    ota.setAutoUpdateEnabled(enabled);
+                    if (enabled) runOnUiThread(MainActivity.this::maybeInstallAutoOta);
+                }
                 // True by default for users upgrading from older versions.
                 if (v.has("thresholdEnabled")) edit.putBoolean("thresholdEnabled", v.getBoolean("thresholdEnabled"));
                 for (String key : new String[]{"agcEnabled", "limiterEnabled", "overloadWarn"}) {
@@ -728,6 +777,8 @@ public class MainActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        otaForeground = false;
+        mainThread.removeCallbacks(autoOtaRetry);
         pendingMusic = false;
         pendingResume = false;
         switchMusicUri = null;

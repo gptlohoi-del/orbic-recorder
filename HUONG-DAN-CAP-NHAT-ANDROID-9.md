@@ -1,3 +1,5 @@
+> **Lưu ý:** Tài liệu này mô tả bản 8.0.7 trước đó. Với chức năng tự động OTA mới, đọc [HƯỚNG DẪN TỰ ĐỘNG OTA / ANDROID 9](HUONG-DAN-TU-DONG-OTA-ANDROID9.md).
+
 # ORBIC RECORDER — Hướng dẫn cập nhật mã nguồn Android 9
 
 Gói này là **full repo Android Studio**, không phải APK cài đặt sẵn.

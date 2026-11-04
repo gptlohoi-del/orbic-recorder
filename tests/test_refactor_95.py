@@ -17,10 +17,10 @@ service = (java / 'RecorderService.java').read_text(encoding='utf-8')
 ota = (java / 'OtaManager.java').read_text(encoding='utf-8')
 gradle = (root / 'app/build.gradle').read_text(encoding='utf-8')
 
-assert 'versionCode (150000 + githubRunNumber)' in gradle
-assert 'versionName (githubRunNumber > 0 ? "9.5.0.${githubRunNumber}"' in gradle
-assert 'ORBIC RECORDER v9.5.0' in activity
-assert 'public static final String BUILTIN_VERSION = "8.0.7"' in ota
+assert 'versionCode (160000 + githubRunNumber)' in gradle
+assert 'versionName (githubRunNumber > 0 ? "9.5.1.${githubRunNumber}"' in gradle
+assert 'ORBIC RECORDER v9.5.1' in activity
+assert 'public static final String BUILTIN_VERSION = "8.0.8"' in ota
 assert '(!versionValid(current) || !newer(current, BUILTIN_VERSION) ||' in ota
 assert 'newer(BUILTIN_VERSION, previous)' in ota
 assert 'newer(BUILTIN_VERSION, old)' in ota
@@ -74,7 +74,7 @@ function fixture(native, rotated=false) {
   return {...state,event,sent:()=>commandCount,advance:(ms)=>{now+=ms;}};
 }
 const yes = {running:true,saving:false,starting:false,
-    supportsSwipeDiscard:true,nativeLabel:'ORBIC RECORDER v9.5.0'};
+    supportsSwipeDiscard:true,nativeLabel:'ORBIC RECORDER v9.5.1'};
 // No command should be issued by tap-only, partial, rapid, or canceled drag.
 let a=fixture(yes);a.open();a.event('pointerdown',40);a.advance(240);a.event('pointerup',40);
 assert.strictEqual(a.sent(),0);
