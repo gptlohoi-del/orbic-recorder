@@ -19,6 +19,9 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Verify threshold bypass and OTA/native compatibility
+        run: python3 tests/test_threshold_toggle.py
+
       - name: Test limiter processing (pure Java)
         run: python3 tests/test_audio_dynamics.py
 
@@ -78,7 +81,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          VERSION="9.4.1.${GITHUB_RUN_NUMBER}"
+          VERSION="9.4.2.${GITHUB_RUN_NUMBER}"
           SOURCE="app/build/outputs/apk/release/app-release.apk"
           TARGET="app/build/outputs/apk/release/Recorder-${VERSION}.apk"
           test -s "$SOURCE"

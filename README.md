@@ -1,3 +1,9 @@
+# BỔ SUNG v9.4.2 — TẮT NGƯỠNG GHI ÂM
+
+Xem [HUONG-DAN-TAT-NGUONG-VA-OTA.md](HUONG-DAN-TAT-NGUONG-VA-OTA.md) để bật/tắt ngưỡng và cách cập nhật qua APK + OTA có chữ ký. Bản APK cũ **không thể thay thuật toán ghi âm chỉ qua OTA giao diện**.
+
+---
+
 **CẬP NHẬT 04/11/2026:** Để sửa nút **XOAY 180°** trên APK v9.4 qua **OTA** mà không cần cài lại, xem [`README-V9.4.1-SUA-XOAY-OTA.md`](README-V9.4.1-SUA-XOAY-OTA.md). Phải phát hành OTA có `nativeApi=8` và chữ ký khớp APK hiện hữu. Các phần hướng dẫn v5.x bên dưới chỉ mang tính tham khảo lịch sử.
 
 # ORBIC RECORDER v9.4.1 — sửa nút XOAY 180° (APK mới / OTA fallback)

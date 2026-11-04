@@ -36,4 +36,4 @@ assert 'restore.remove("priorUri")' in archive
 assert 'public static final int NATIVE_API = 8;' in ota
 assert 'public static final String BUILTIN_VERSION = "8.0.0";' in ota
 assert 'versionCode (120000 + githubRunNumber)' in (root/'app/build.gradle').read_text()
-print('PASS: v9.4.1 reliable rotation, 3 tracks, swipe confirm, crash-safe session discard, OTA boundary')
+print('PASS: v9.4.2 reliable rotation, 3 tracks, swipe confirm, crash-safe session discard, OTA boundary')

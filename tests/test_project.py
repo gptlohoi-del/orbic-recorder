@@ -49,7 +49,7 @@ assert 'onMusicPaused()' in activity and 'waitForResumeMicRelease' in activity
 assert 'data.put("pauseStopFade", cfg.getInt("pauseStopFade", 2000))' in activity
 assert 'data.put("waveHeight", cfg.getInt("waveHeight", 92))' in activity
 assert 'MUSIC_PAUSE' in service and 'MUSIC_RESUME' in service
-assert 'releaseMicrophone();' in service and 'if (elapsed % 5 == 0) threshold = cfg.getInt' in service
+assert 'releaseMicrophone();' in service and 'threshold = cfg.getInt("threshold", -38);' in service
 assert 'cfg.getInt("warnSeconds", 9999)' in activity
 assert 'cfg.getInt("warnSeconds", 9999)' in service
 assert 'MediaPlayer' in music and 'Math.min(Math.max(0, requestedFadeMs), remaining)' in music
@@ -93,4 +93,4 @@ assert 'edit.putString("waveStyle", waveStyle)' in activity
 assert 'NATIVE_API = 8' in script
 assert 'CẦN CẬP NHẬT APK ĐỂ KIỂM TRA' in js
 assert 'NATIVE_API = 8' in script
-print('PASS: v9.4.1 source, device AGC availability, AGC/limiter, Settings, OTA API, JS syntax')
+print('PASS: v9.4.2 source, device AGC availability, AGC/limiter, Settings, OTA API, JS syntax')

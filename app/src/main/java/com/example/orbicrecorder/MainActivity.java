@@ -31,7 +31,7 @@ import java.util.Collections;
 
 /** Native recorder from v4 + OTA-updateable local HTML/CSS/JS user interface. */
 public class MainActivity extends Activity {
-    private static final String NATIVE_LABEL = "ORBIC RECORDER v9.4.1";
+    private static final String NATIVE_LABEL = "ORBIC RECORDER v9.4.2";
     private static final String LOCAL_ORIGIN = "https://appassets.androidplatform.net";
     private static final int REQUEST_MIC = 101;
     private static final int REQUEST_FOLDER = 102;
@@ -446,6 +446,7 @@ public class MainActivity extends Activity {
                 data.put("pre", cfg.getInt("pre", 1000));
                 data.put("tail", cfg.getInt("tail", 1000));
                 data.put("threshold", cfg.getInt("threshold", -38));
+                data.put("thresholdEnabled", cfg.getBoolean("thresholdEnabled", true));
                 data.put("agcEnabled", cfg.getBoolean("agcEnabled", true));
                 data.put("agcSupported", agcSupported);
                 data.put("limiterEnabled", cfg.getBoolean("limiterEnabled", true));
@@ -599,6 +600,8 @@ public class MainActivity extends Activity {
                     edit.putString("waveStyle", waveStyle);
                 }
                 if (v.has("backupRaw")) edit.putBoolean("backupRaw", v.getBoolean("backupRaw"));
+                // True by default for users upgrading from older versions.
+                if (v.has("thresholdEnabled")) edit.putBoolean("thresholdEnabled", v.getBoolean("thresholdEnabled"));
                 for (String key : new String[]{"agcEnabled", "limiterEnabled", "overloadWarn"}) {
                     if (v.has(key)) edit.putBoolean(key, v.getBoolean(key));
                 }

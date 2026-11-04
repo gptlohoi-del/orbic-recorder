@@ -23,6 +23,9 @@
 .waveform .threshold-mirror-line{display:none;position:absolute;left:0;right:0;border-top:2px dashed #ffb44d;opacity:.9;pointer-events:none;z-index:2}
 .waveform[data-style="mirror"] .threshold-mirror-line{display:block}
 .waveform .threshold-line{z-index:3}
+/* When recording continuously no threshold line is meaningful. */
+.waveform.threshold-disabled .threshold-line,.waveform.threshold-disabled .threshold-mirror-line{display:none}
+.numeric-item.threshold-disabled{opacity:.6}
 .wave-style-picker{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0 12px}
 .wave-style-option{position:relative;display:flex;flex-direction:column;gap:4px;min-width:0;padding:9px 9px 7px;border:2px solid var(--border);border-radius:11px;background:var(--panel);cursor:pointer;touch-action:manipulation}
 .wave-style-option.selected{border-color:#19a77f;background:color-mix(in srgb,var(--panel) 89%,#20c89a 11%)}

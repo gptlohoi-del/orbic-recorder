@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Native v5.1: one 16-kHz capture stream writes a full, unfiltered backup (optional)
- * and VAD-filtered audio at the same time. Both are split into durable 15-min
+ * and threshold-filtered (or continuous) audio at the same time. Both are split into durable 15-min
  * default segments. A disk executor publishes closed WAV files without blocking
  * AudioRecord. "Pause" suspends *both* outputs.
  */
@@ -158,7 +158,9 @@ public class RecorderService extends Service {
                 if (recording && !stopping) {
                     paused = false;
                     state().edit().putBoolean("paused", false)
-                            .putString("capture", musicHold ? "NHẠC ĐANG PHÁT – MICRO TẮT" : "ĐANG CHỜ TIẾNG ĐỘNG").apply();
+                            .putString("capture", musicHold ? "NHẠC ĐANG PHÁT – MICRO TẮT" :
+                                    config().getBoolean("thresholdEnabled", true)
+                                            ? "ĐANG CHỜ TIẾNG ĐỘNG" : "ĐANG GHI LIÊN TỤC").apply();
                     notifyChanged();
                 }
                 break;
@@ -194,7 +196,9 @@ public class RecorderService extends Service {
                     .putBoolean("paused", false).putBoolean("musicSuspended", startHeld)
                     .putBoolean("overload", false).putString("agcStatus", startHeld ? "Đợi nhạc dừng" : hardwareAgcStatus)
                     .putBoolean("starting", false).putString("error", "")
-                    .putString("capture", startHeld ? "NHẠC ĐANG PHÁT – MICRO TẮT" : "ĐANG CHỜ TIẾNG ĐỘNG")
+                    .putString("capture", startHeld ? "NHẠC ĐANG PHÁT – MICRO TẮT" :
+                            config().getBoolean("thresholdEnabled", true)
+                                    ? "ĐANG CHỜ TIẾNG ĐỘNG" : "ĐANG GHI LIÊN TỤC")
                     .putString("activeSession", session)
                     .putString("priorUri", priorUri).putString("priorFile", priorFile)
                     .putString("priorLastRaw", priorRaw)
@@ -311,6 +315,7 @@ public class RecorderService extends Service {
     private void captureLoop(String session) {
         SharedPreferences cfg = config();
         int threshold = cfg.getInt("threshold", -38);
+        boolean thresholdEnabled = cfg.getBoolean("thresholdEnabled", true);
         int confirm = Math.max(1, (cfg.getInt("minSpeech", 180) + FRAME_MS - 1) / FRAME_MS);
         int preFrames = Math.max(0, (cfg.getInt("pre", 1000) + FRAME_MS - 1) / FRAME_MS);
         int tailFrames = Math.max(1, (cfg.getInt("tail", 1000) + FRAME_MS - 1) / FRAME_MS);
@@ -362,7 +367,9 @@ public class RecorderService extends Service {
                     audio = openMicrophone();
                     audio.startRecording();
                     state().edit().putBoolean("musicSuspended", false)
-                            .putString("capture", paused ? "ĐANG TẠM DỪNG" : "ĐANG CHỜ TIẾNG ĐỘNG").apply();
+                            .putString("capture", paused ? "ĐANG TẠM DỪNG" :
+                                    cfg.getBoolean("thresholdEnabled", true)
+                                            ? "ĐANG CHỜ TIẾNG ĐỘNG" : "ĐANG GHI LIÊN TỤC").apply();
                     pre.clear(); candidate.clear(); tail.clear();
                     wasPaused = false;
                     silence = 0;
@@ -403,7 +410,9 @@ public class RecorderService extends Service {
                     active = false;
                     tail.clear(); pre.clear(); candidate.clear();
                     state().edit().putInt("part", part)
-                            .putString("capture", "ĐÃ LƯU ĐOẠN – ĐANG LẮNG NGHE").apply();
+                            .putString("capture", thresholdEnabled
+                                    ? "ĐÃ LƯU ĐOẠN – ĐANG LẮNG NGHE"
+                                    : "ĐÃ LƯU ĐOẠN – GHI LIÊN TỤC").apply();
                 }
                 byte[] block = Arrays.copyOf(frame, FRAME_SIZE);
                 elapsed++; partFrames++;
@@ -434,12 +443,30 @@ public class RecorderService extends Service {
 
                 double amp = rms(frame);
                 double db = 20 * Math.log10(Math.max(1.0e-9, amp / 32768.0));
-                // Quick threshold +/- is hot-applied while recording (<=100 ms latency).
-                if (elapsed % 5 == 0) threshold = cfg.getInt("threshold", -38);
-                boolean loud = db >= threshold;
+                // Both the threshold and the continuous-recording switch are hot-applied
+                // within five 20 ms frames without reopening the microphone.
+                if (elapsed % 5 == 0) {
+                    threshold = cfg.getInt("threshold", -38);
+                    thresholdEnabled = cfg.getBoolean("thresholdEnabled", true);
+                }
+                boolean loud = !thresholdEnabled || db >= threshold;
                 silence = loud ? 0 : silence + 1;
 
-                if (active) {
+                // Disabling VAD must write EVERY frame, even digital silence and
+                // captures shorter than minSpeech. Do not fake this with -80 dBFS:
+                // true silence is floored to -180 dBFS in the RMS calculation.
+                if (!thresholdEnabled) {
+                    if (!active) {
+                        active = true;
+                        segments++;
+                        kept += flush(current, pre);
+                        kept += flush(current, candidate);
+                    }
+                    kept += flush(current, tail);
+                    current.voice.write(block);
+                    current.voiceBytes += block.length;
+                    kept += block.length;
+                } else if (active) {
                     if (loud) {
                         kept += flush(current, tail);
                         current.voice.write(block);
@@ -478,6 +505,7 @@ public class RecorderService extends Service {
                     int level = (int) Math.max(0, Math.min(100, (db + 60.0) * 100.0 / 60.0));
                     boolean overload = overloadWarn && elapsed <= warningUntilFrame;
                     String capture = overload ? "⚠ TÍN HIỆU GẦN 0 dBFS – KIỂM TRA MICRO" :
+                            !thresholdEnabled ? "● GHI LIÊN TỤC – ĐÃ TẮT NGƯỠNG" :
                             active ? "● ĐANG GIỮ ÂM THANH" : silence > warnFrames ?
                             "! KHÔNG CÓ TIẾNG NÓI – KIỂM TRA NGUỒN" : "ĐANG LỌC KHOẢNG LẶNG";
                     state().edit().putLong("elapsedMs", elapsed * FRAME_MS)

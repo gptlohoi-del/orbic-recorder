@@ -192,6 +192,25 @@
     document.documentElement.style.setProperty('--panel-opacity',cap(Number(coalesce(data.uiOpacity,100)),30,100)/100);
     document.documentElement.style.setProperty('--wave-height',cap(Number(coalesce(data.waveHeight,92)),30,180)+'px');
   }
+  // Old native APKs do not know thresholdEnabled; keep the UI visible but
+  // disabled so an OTA-only install never promises continuous recording.
+  function updateThresholdSupport(d){
+    const supported=!!d && typeof d.thresholdEnabled==='boolean';
+    const enabled=!supported || d.thresholdEnabled;
+    $('thresholdEnabled').disabled=!supported;
+    $('thresholdEnabled').checked=enabled;
+    setText('thresholdSupport',supported
+      ? 'Bỏ chọn để ghi liên tục, kể cả âm thanh rất nhỏ và khoảng lặng. Có hiệu lực trong khoảng 100 ms; PAUSE và tắt micro khi phát nhạc vẫn hoạt động.'
+      : 'Cần cài APK v9.4.2 trở lên một lần để tắt ngưỡng thực sự. OTA chỉ cập nhật giao diện nên không thể thay thuật toán của APK cũ.');
+    $('thresholdMinus').disabled=$('thresholdPlus').disabled=!enabled;
+    $('waveform').classList.toggle('threshold-disabled',!enabled);
+    const numeric=document.querySelector('[data-key="threshold"]');
+    if(numeric){
+      numeric.classList.toggle('threshold-disabled',!enabled);
+      for(const control of numeric.querySelectorAll('input,button'))control.disabled=!enabled;
+    }
+    return enabled;
+  }
   function openSettings() {
     if (!current)return;
     for(const spec of specs) data[spec.key]=coalesce(current[spec.key],spec.default);
@@ -202,6 +221,7 @@
     specs.forEach(s=>document.querySelector(`[data-key="${s.key}"]`).updateViews());
     $('theme').value=data.theme;
     $('backupRaw').checked=current.backupRaw!==false;
+    updateThresholdSupport(current);
     for(const key of ['agcEnabled','limiterEnabled','overloadWarn']) $(key).checked=current[key]!==false;
     setText('agcStatus',current.agcStatus||'Chưa khởi động micro');
     $('splitMinutes').value=String(current.splitMinutes||15);
@@ -213,6 +233,15 @@
   $('closeSettings').onclick=$('closeBottom').onclick=$('modalBackdrop').onclick=closeSettings;
   $('theme').onchange=()=>{data.theme=$('theme').value;save({theme:data.theme});applyTheme();};
   $('backupRaw').onchange=()=>save({backupRaw:$('backupRaw').checked});
+  $('thresholdEnabled').onchange=()=>{
+    if(!current || typeof current.thresholdEnabled!=='boolean')return;
+    const enabled=$('thresholdEnabled').checked;
+    current.thresholdEnabled=enabled;
+    save({thresholdEnabled:enabled});
+    updateThresholdSupport(current);
+    refreshThreshold(coalesce(current.threshold,-38));
+    setText('saveStatus',enabled?'Đã bật lọc ngưỡng':'Đã tắt ngưỡng – ghi liên tục');
+  };
   for (const key of ['agcEnabled','limiterEnabled','overloadWarn']) {
     $(key).onchange=()=>save({[key]:$(key).checked});
   }
@@ -224,7 +253,7 @@
   };
   for(const id of ['playLast','chooseFolder','resetFolder','checkOta','installOta','rollback'])
     $(id).onclick=()=>{if(id==='chooseFolder')closeSettings();send(id);};
-  // v9.4.1 native rotates the entire WebView with reliable touch mapping.
+  // v9.4.1+ native rotates the entire WebView with reliable touch mapping.
   // In original v9.4 the Android orientation request may be silently ignored.
   // OTA can patch that older APK with a CSS-only *app UI* fallback; NEVER call
   // its broken native orientation action at the same time (would double-flip).
@@ -250,7 +279,7 @@
       } else send(id);
     };
   function changeThreshold(direction){
-    if(!current)return;
+    if(!current || current.thresholdEnabled===false)return;
     const spec=specs.find(s=>s.key==='threshold'),r=rule(spec);
     const previous=Number(coalesce(current.threshold,coalesce(data.threshold,spec.default)));
     const next=cap(previous+direction*r.step,r.min,r.max);
@@ -262,29 +291,18 @@
   $('thresholdPlus').onclick=()=>changeThreshold(1);
   function refreshThreshold(threshold){
     const t=Number(threshold);
-    setText('thresholdValue',t+' dBFS');
+    setText('thresholdValue',current && current.thresholdEnabled===false?'ĐÃ TẮT':t+' dBFS');
     // Recorder uses -60..0 dBFS for its level scale; line and bars share it.
     const height=cap((t+60)/60*100,3,97);
     $('thresholdLine').style.top=(activeWaveStyle==='mirror'?(100-height)/2:100-height)+'%';
     $('thresholdMirrorLine').style.top=((100+height)/2)+'%';
   }
   $('start').onclick=()=>send('start');
-  // $('pause').onclick=()=>{
-  //   if(current&&current.paused) send('resume');
-  //   else confirmAction('Tạm dừng ghi âm?','Ghi âm sẽ ngừng thủ công và chỉ tiếp tục khi bạn bấm TIẾP TỤC.','pause');
-  // };
   $('pause').onclick=()=>{
-    if(current && current.paused) {
-      send('resume');
-    } else {
-      send('pause');
-    }
+    if(current&&current.paused) send('resume');
+    else confirmAction('Tạm dừng ghi âm?','Ghi âm sẽ ngừng thủ công và chỉ tiếp tục khi bạn bấm TIẾP TỤC.','pause');
   };
-
-
-
-  //$('stop').onclick=()=>confirmAction('Dừng và lưu phiên ghi?','Toàn bộ âm thanh đã thu sẽ được hoàn tất và lưu WAV. Phiên lắng nghe sẽ dừng nhưng nhạc đang phát vẫn tiếp tục.','stop');
-  $('stop').onclick=()=>send('stop');
+  $('stop').onclick=()=>confirmAction('Dừng và lưu phiên ghi?','Toàn bộ âm thanh đã thu sẽ được hoàn tất và lưu WAV. Phiên lắng nghe sẽ dừng nhưng nhạc đang phát vẫn tiếp tục.','stop');
   // Confirmation requires a real pointer drag across the track.
   // A tap or a partial swipe can NEVER call the native discard action.
   const swipeTrack=$('discardTrack'), swipeThumb=$('discardThumb'), swipeFill=$('swipeFill');
@@ -394,6 +412,7 @@
       levels.shift();levels.push(d.running&&!d.paused&&!d.musicAudible&&!changing&&!d.musicSuspended?cap(Number(d.level||0),0,100):0);
       renderWaveform();
       if(!settingsOpened) data.threshold=coalesce(d.threshold,data.threshold);
+      updateThresholdSupport(d);
       refreshThreshold(coalesce(d.threshold,-38));
       if(!settingsOpened){
         for(const key of ['uiFont','uiOpacity','waveHeight','theme']) data[key]=coalesce(d[key],data[key]);
