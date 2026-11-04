@@ -461,7 +461,7 @@ public class MainActivity extends Activity {
                 data.put("pre", cfg.getInt("pre", 1000));
                 data.put("tail", cfg.getInt("tail", 1000));
                 data.put("threshold", cfg.getInt("threshold", -38));
-                data.put("thresholdEnabled", cfg.getBoolean("thresholdEnabled", true));
+                data.put("thresholdEnabled", cfg.getBoolean("thresholdEnabled", false));
                 data.put("agcEnabled", cfg.getBoolean("agcEnabled", true));
                 data.put("agcSupported", agcSupported);
                 data.put("limiterEnabled", cfg.getBoolean("limiterEnabled", true));
@@ -482,16 +482,17 @@ public class MainActivity extends Activity {
                 data.put("musicVolume", cfg.getInt("musicVolume", 80));
                 data.put("listenDelay", cfg.getInt("listenDelay", 600));
                 data.put("uiFont", cfg.getInt("uiFont", 100));
+                data.put("noticeFont", cfg.getInt("noticeFont", 100));
                 data.put("uiOpacity", cfg.getInt("uiOpacity", 100));
                 data.put("waveHeight", cfg.getInt("waveHeight", 92));
-                data.put("waveStyle", cfg.getString("waveStyle", "mirror"));
+                data.put("waveStyle", cfg.getString("waveStyle", "line"));
                 data.put("gearX", cfg.getInt("gearX", 99));
                 data.put("gearY", cfg.getInt("gearY", 0));
                 data.put("numericLimits", cfg.getString("numericLimits", "{}"));
                 data.put("minSpeech", cfg.getInt("minSpeech", 180));
                 data.put("warnSeconds", cfg.getInt("warnSeconds", 9999));
-                data.put("backupRaw", cfg.getBoolean("backupRaw", true));
-                data.put("splitMinutes", cfg.getInt("splitMinutes", 15));
+                data.put("backupRaw", cfg.getBoolean("backupRaw", false));
+                data.put("splitMinutes", cfg.getInt("splitMinutes", 60));
                 data.put("theme", cfg.getString("theme", "system"));
                 data.put("otaStatus", ota.getStatus());
                 data.put("otaMessage", ota.getMessage());
@@ -605,10 +606,10 @@ public class MainActivity extends Activity {
             try {
                 JSONObject v = new JSONObject(json);
                 String[] numeric = { "threshold", "minSpeech", "pre", "tail", "warnSeconds",
-                        "fadeIn", "fadeOut", "pauseStopFade", "musicVolume", "listenDelay", "uiFont", "uiOpacity", "waveHeight",
+                        "fadeIn", "fadeOut", "pauseStopFade", "musicVolume", "listenDelay", "uiFont", "noticeFont", "uiOpacity", "waveHeight",
                         "limitDb", "attackMs", "releaseMs", "overloadDb" };
-                int[] low = { -80, 20, 0, 100, 5, 0, 0, 0, 0, 0, 75, 30, 30, -30, 1, 20, -12 };
-                int[] high = { -5, 2000, 10000, 10000, 9999, 30000, 30000, 15000, 100, 5000, 160, 100, 180, -1, 250, 5000, -1 };
+                int[] low = { -80, 20, 0, 100, 5, 0, 0, 0, 0, 0, 75, 75, 30, 30, -30, 1, 20, -12 };
+                int[] high = { -5, 2000, 10000, 10000, 9999, 30000, 30000, 15000, 100, 5000, 160, 200, 100, 180, -1, 250, 5000, -1 };
                 SharedPreferences.Editor edit = config().edit();
                 for (int i = 0; i < numeric.length; i++) {
                     if (v.has(numeric[i])) {

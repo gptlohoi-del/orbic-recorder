@@ -33,7 +33,7 @@ import java.util.zip.ZipInputStream;
  */
 public final class OtaManager {
     public static final int NATIVE_API = 8;
-    public static final String BUILTIN_VERSION = "8.0.6";
+    public static final String BUILTIN_VERSION = "8.0.7";
     private static final String MANIFEST_URL =
             "https://raw.githubusercontent.com/gptlohoi-del/orbic-recorder/main/ota/latest.json";
     private static final String BUNDLE_PREFIX =

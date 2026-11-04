@@ -22,7 +22,8 @@
     {key:'attackMs',label:'Thời gian giảm mức âm (Attack)',unit:'ms',default:10,min:1,max:100,step:1,hardMin:1,hardMax:250,group:'protect'},
     {key:'releaseMs',label:'Thời gian phục hồi mức âm (Release)',unit:'ms',default:500,min:50,max:2000,step:50,hardMin:20,hardMax:5000,group:'protect'},
     {key:'overloadDb',label:'Mức cảnh báo đầu vào gần quá tải',unit:'dBFS',default:-1,min:-12,max:-1,step:1,hardMin:-12,hardMax:-1,group:'protect'},
-    {key:'uiFont',label:'Tỷ lệ kích thước chữ',unit:'%',default:100,min:75,max:160,step:5,group:'view'},
+    {key:'uiFont',label:'Tỷ lệ kích thước chữ toàn giao diện',unit:'%',default:100,min:75,max:160,step:5,group:'view'},
+    {key:'noticeFont',label:'Kích thước chữ vùng THÔNG BÁO',unit:'%',default:100,min:75,max:200,step:5,group:'notice'},
     {key:'uiOpacity',label:'Độ đậm nền các khung',unit:'%',default:100,min:30,max:100,step:5,group:'view'},
     {key:'waveHeight',label:'Độ cao vùng sóng âm',unit:'px',default:92,min:45,max:135,step:5,hardMin:30,hardMax:180,group:'view'}
   ];
@@ -41,7 +42,7 @@
     {key:'line',name:'Đường sóng mềm',description:'Nét liền, chuyển động mượt'},
     {key:'dots',name:'Chấm nhịp',description:'Hiện đại, gọn mắt'}
   ];
-  let activeWaveStyle = 'mirror';
+  let activeWaveStyle = 'line';
   for (let i=0;i<30;i++) { const el=document.createElement('i'); el.className='bar'; $('waveBars').append(el); bars.push(el); }
   function cap(x,lo,hi){return Math.max(lo,Math.min(hi,x));}
   const svgNS = 'http://www.w3.org/2000/svg';
@@ -97,7 +98,7 @@
     }
   }
   function applyWaveStyle(choice){
-    activeWaveStyle=waveStyles.some(s=>s.key===choice)?choice:'mirror';
+    activeWaveStyle=waveStyles.some(s=>s.key===choice)?choice:'line';
     $('waveform').dataset.style=activeWaveStyle;
     for(const input of document.querySelectorAll('input[name="waveStyle"]')){
       input.checked=input.value===activeWaveStyle;
@@ -190,7 +191,10 @@
     const v=data.theme||'system';
     if(v==='system')document.documentElement.removeAttribute('data-theme');
     else document.documentElement.dataset.theme=v;
-    document.documentElement.style.setProperty('--font-scale',cap(Number(data.uiFont||100),75,160)/100);
+    document.documentElement.style.setProperty('--font-scale',cap(Number(coalesce(data.uiFont,100)),75,160)/100);
+    const noticeScale=cap(Number(coalesce(data.noticeFont,100)),75,200)/100;
+    document.documentElement.style.setProperty('--notice-font-size',(10*noticeScale)+'px');
+    document.documentElement.style.setProperty('--notice-small-font-size',(9*noticeScale)+'px');
     document.documentElement.style.setProperty('--panel-opacity',cap(Number(coalesce(data.uiOpacity,100)),30,100)/100);
     document.documentElement.style.setProperty('--wave-height',cap(Number(coalesce(data.waveHeight,92)),30,180)+'px');
   }
@@ -218,15 +222,15 @@
     for(const spec of specs) data[spec.key]=coalesce(current[spec.key],spec.default);
     try { limits=JSON.parse(current.numericLimits||'{}')||{}; }catch(e){limits={};}
     data.theme=current.theme||'system';
-    data.waveStyle=current.waveStyle||data.waveStyle||'mirror';
+    data.waveStyle=current.waveStyle||data.waveStyle||'line';
     applyWaveStyle(data.waveStyle);
     specs.forEach(s=>document.querySelector(`[data-key="${s.key}"]`).updateViews());
     $('theme').value=data.theme;
-    $('backupRaw').checked=current.backupRaw!==false;
+    $('backupRaw').checked=current.backupRaw===true;
     updateThresholdSupport(current);
     for(const key of ['agcEnabled','limiterEnabled','overloadWarn']) $(key).checked=current[key]!==false;
     setText('agcStatus',current.agcStatus||'Chưa khởi động micro');
-    $('splitMinutes').value=String(current.splitMinutes||15);
+    $('splitMinutes').value=String(coalesce(current.splitMinutes,60));
     renderAdvanced();settingsOpened=true;$('modal').hidden=false;
   }
   function closeSettings(){settingsOpened=false;$('modal').hidden=true;}
@@ -452,7 +456,10 @@
           else if(current&&current.activeRecordingId===item.id&&current.musicStatus==='playing')send('musicPause');
           else playRecordingItem(item);
         };
-        const details=document.createElement('div');details.className='recording-file-details';
+        const details=document.createElement('button');details.type='button';details.className='recording-file-details';
+        details.setAttribute('aria-label','Nghe bản ghi '+item.name);
+        details.title='Chạm để nghe '+item.name;
+        details.onclick=play.onclick;
         const name=document.createElement('strong');name.textContent=(index+1)+'. '+item.name;
         const meta=document.createElement('small');
         meta.textContent=dateLabel(item.modified)+' · '+(item.raw?'WAV gốc':'WAV đã lọc')+
@@ -509,7 +516,7 @@
     const playing=!!id&&d.musicStatus!=='idle';
     const index=recordings.findIndex(x=>x.id===id);
     markActiveRecording(id);
-    setText('recordingNow',playing?(d.musicTitle||'Đang mở bản ghi'):'Chọn ▶ ở một bản ghi để nghe lại');
+    setText('recordingNow',playing?(d.musicTitle||'Đang mở bản ghi'):'Chạm vào tên file hoặc ▶ để nghe lại');
     setText('recordingTime',shortTime(playing?d.musicPosition:0)+' / '+shortTime(playing?d.musicDuration:0));
     const pause=$('recordingPause');
     pause.disabled=!playing||d.musicStatus==='loading'||d.musicStatus==='fadingPause'||
@@ -530,7 +537,7 @@
       const d=JSON.parse(window.Orbic.snapshot());current=d;
       if(!settingsOpened && Object.keys(data).length===0){
         for(const spec of specs)data[spec.key]=coalesce(d[spec.key],spec.default);
-        data.theme=d.theme||'system';data.waveStyle=d.waveStyle||'mirror';applyTheme();applyWaveStyle(data.waveStyle);
+        data.theme=d.theme||'system';data.waveStyle=d.waveStyle||'line';applyTheme();applyWaveStyle(data.waveStyle);
       }
       const playing=d.musicStatus!=='idle', changing=!!d.pendingMusic||!!d.pendingResume;
       const fading=d.musicStatus==='fadingPause'||d.musicStatus==='fadingStop';
@@ -595,7 +602,7 @@
       updateRecordingPlayer(d);
       setText('error',d.error||'');$('error').hidden=!d.error;
       if(d.error) setText('capture','⚠ '+d.error);
-      setText('otaVersion','Giao diện '+(d.otaVersion||'8.0.6'));setText('otaMessage',d.otaMessage||'Chưa kiểm tra');
+      setText('otaVersion','Giao diện '+(d.otaVersion||'8.0.7'));setText('otaMessage',d.otaMessage||'Chưa kiểm tra');
       $('installOta').disabled=!d.otaAvailable||d.otaStatus!=='available'||d.running||d.saving||playing||changing;
       $('rollback').hidden=!d.canRollback;
       levels.shift();levels.push(d.running&&!d.paused&&!d.musicAudible&&!changing&&!d.musicSuspended?cap(Number(d.level||0),0,100):0);
@@ -604,8 +611,8 @@
       updateThresholdSupport(d);
       refreshThreshold(coalesce(d.threshold,-38));
       if(!settingsOpened){
-        for(const key of ['uiFont','uiOpacity','waveHeight','theme']) data[key]=coalesce(d[key],data[key]);
-        if((d.waveStyle||'mirror')!==activeWaveStyle)applyWaveStyle(d.waveStyle||'mirror');
+        for(const key of ['uiFont','noticeFont','uiOpacity','waveHeight','theme']) data[key]=coalesce(d[key],data[key]);
+        if((d.waveStyle||'line')!==activeWaveStyle)applyWaveStyle(d.waveStyle||'line');
         applyTheme();
       }
     }catch(e){setText('error','MẤT KẾT NỐI ANDROID');$('error').hidden=false;}

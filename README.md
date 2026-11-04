@@ -4,13 +4,13 @@
 
 ## Chức năng chính
 
-- **Xoay đúng 180°:** nút ở góc phải tiêu đề `ORBIC RECORDER`; xoay toàn bộ Android WebView 180° cùng vùng cảm ứng, không xoay 90°. Ghi nhớ trạng thái khi mở lại. Không xoay thanh hệ thống Android.
+- **Xoay đúng 180°:** nút ở góc phải hàng `♫ PHÁT NHẠC` (chỉ còn một tiêu đề `ORBIC RECORDER` của Android); xoay toàn bộ Android WebView 180° cùng vùng cảm ứng, không xoay 90°. Ghi nhớ trạng thái khi mở lại. Không xoay thanh hệ thống Android.
 - **3 bài nhạc chọn nhanh:** nút `▶ BÀI 1`, `▶ BÀI 2`, `▶ BÀI 3` và từng nút 📂. Nhấn 📂 chọn bài mặc định, được lưu bằng quyền SAF. `+ BÀI KHÁC` phát file bất kỳ. Giữ fade giữa các bài; PAUSE và STOP nhạc không làm mất bản ghi.
 - **DỪNG & KHÔNG LƯU:** nằm dưới `START`, `PAUSE`, `DỪNG & LƯU`; mở hộp thoại, vuốt thực sự trái → phải gần hết thanh để xác nhận hủy **toàn bộ các file thuộc phiên ghi hiện tại**, bao gồm các đoạn đã xuất. Hủy không ảnh hưởng bản ghi các phiên cũ. Lỗi xóa được thông báo và đánh dấu thử lại sau sự cố.
 - **Bật/tắt ngưỡng phát hiện** trong Settings → GHI ÂM: tắt thì lưu cả khung PCM yên lặng, cập nhật khoảng 100 ms khi đang thu. Vẫn không mở mic trong lúc phát nhạc; `PAUSE` vẫn tạm dừng thu. Giữ tùy chọn backup RAW, chia WAV định kỳ, limiter, AGC và 4 kiểu sóng âm.
 - **Điều khiển Android notification:** `PAUSE/TIẾP GHI` và `DỪNG & LƯU` (không bao giờ đặt lệnh hủy file trên notification).
 - **Phát nhạc không đòi cấp quyền mic.** Chỉ `START` ghi âm mới xin `RECORD_AUDIO`.
-- **Cơ chế OTA ký RSA:** chỉ cập nhật HTML/CSS/JS. APK cũ chưa hỗ trợ chức năng native sẽ khóa các nút tương ứng thay vì báo thành công sai. APK có giao diện nhúng `8.0.6`, mới hơn OTA `8.0.5`, để các nút nghe lại bản ghi không bị OTA cũ che mất; OTA tiếp theo tối thiểu là `8.0.7`.
+- **Cơ chế OTA ký RSA:** chỉ cập nhật HTML/CSS/JS. APK cũ chưa hỗ trợ chức năng native sẽ khóa các nút tương ứng thay vì báo thành công sai. APK có giao diện nhúng `8.0.7`, mới hơn OTA `8.0.5`, để các nút nghe lại bản ghi không bị OTA cũ che mất; OTA tiếp theo tối thiểu là `8.0.8`.
 
 ## Cài lại / cập nhật APK **không mất dữ liệu**
 
@@ -55,7 +55,7 @@ gradle --no-daemon :app:assembleDebug
 CI build APK với `compileSdk 35`, `minSdk 28` (Android 9), `targetSdk 32`, Java 17. **Các test mã nguồn không thay thế thử nghiệm Android 9/10/13 trên thiết bị thật**, nhất là quyền SAF, xóa WAV và nhạc/micro luân phiên. Cần xem `HUONG-DAN-BUILD-OTA-v9.5.0.md` để kiểm thử trước khi phát hành chính thức.
 
 
-## Thư viện nghe lại bản ghi WAV (cập nhật giao diện 8.0.6)
+## Thư viện nghe lại bản ghi WAV (cập nhật giao diện 8.0.7)
 
 Hai nút nhỏ ở phía phải dòng **🎙 GHI THEO TIẾNG ĐỘNG**:
 
@@ -65,3 +65,14 @@ Hai nút nhỏ ở phía phải dòng **🎙 GHI THEO TIẾNG ĐỘNG**:
 Trình nghe lại có PAUSE/TIẾP, STOP, TRƯỚC/SAU và tua thời gian. Dùng chung cơ chế nhường micro của trình phát nhạc hiện tại, không thay đổi cách thu hay xoá WAV. Danh sách được làm mới bằng **↻** và tự cập nhật khi app hoàn tất lưu file mới trong khi thư viện đang mở. File WAV được đọc từ thư mục SAF người dùng đã chọn và thư mục dự phòng OrbicRecorder trên Android 9–15 (tối đa 500 file gần nhất). 
 
 **Cần build/cài APK mới:** tính năng đọc danh sách, phát file chọn và tua phụ thuộc Java native mới trong `RecordingLibrary.java` / `MainActivity.java` / `MusicPlayer.java`; chỉ đẩy `app.js/index.html/app.css` qua OTA lên APK cũ sẽ bị khoá hai nút. Xem thêm `README-THU-VIEN-GHI-AM.md`.
+
+## Tùy chỉnh bổ sung (giao diện 8.0.7)
+
+- Chỉ hiển thị một dòng **ORBIC RECORDER** do thanh tiêu đề Android quản lý. Nút **XOAY 180°** chuyển vào cùng hàng với **♫ PHÁT NHẠC** để tiết kiệm không gian.
+- Cài đặt → **🔔 VÙNG THÔNG BÁO**: chỉnh riêng chữ trong khung thông báo từ **75% đến 200%**; mặc định 100%, tự lưu trong Android SharedPreferences. Thanh chỉnh chữ chung vẫn độc lập.
+- Cài đặt → **🎨 GIAO DIỆN**: kiểu **Đường sóng mềm** là mặc định khi chưa có lựa chọn đã lưu.
+- Cài đặt → **🎙 GHI ÂM**: mặc định **tắt ngưỡng phát hiện (ghi liên tục)**, **không lưu WAV gốc**, **chia file mỗi 60 phút**. Đây là giá trị mặc định thật ở Java RecorderService, không chỉ checkbox HTML. **Cấu hình cũ do người dùng lưu vẫn được ưu tiên**, không tự ghi đè khi nâng cấp.
+- Danh sách nghe lại: có thể bấm **tên file, ngày giờ của file hoặc nút ▶** để phát/tạm dừng cùng một bản ghi; giữ thứ tự bản ghi mới nhất lên đầu.
+- Không thay `applicationId`, `minSdk=28`, targetSdk=32, cấu trúc SAF và quyền ghi âm. Cần build APK mới do có chỉnh sửa native Java; giao diện 8.0.7 nhúng trong APK sẽ thay thế các bản OTA giao diện cũ <=8.0.6.
+
+**Lưu ý Android 9:** Mã nguồn có kiểm thử hợp đồng minSdk 28 và đường lưu tệp SAF/nội bộ, nhưng vẫn cần chạy bản APK trên điện thoại Android 9 thật để xác nhận mic, quyền, ghi dài 60 phút và phát WAV. Không gỡ APK cũ hoặc xóa dữ liệu ứng dụng trước khi sao lưu bản ghi.

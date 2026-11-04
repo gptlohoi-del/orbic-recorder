@@ -1,3 +1,13 @@
+## Giao diện 8.0.7 – Tùy chỉnh theo yêu cầu (2026-11-05)
+
+- Giữ lại tiêu đề Android `ORBIC RECORDER`, bỏ tiêu đề HTML trùng và đặt XOAY 180° cùng hàng PHÁT NHẠC.
+- Thêm thanh chỉnh riêng kích thước chữ vùng THÔNG BÁO (75–200%), lưu bền trong cấu hình native.
+- Mặc định mới: kiểu sóng `line` (Đường sóng mềm); ngưỡng phát hiện tắt; không giữ WAV gốc; chia WAV theo 60 phút.
+- Không ghi đè cấu hình người dùng đã thay đổi trước khi cập nhật.
+- Chạm trực tiếp tên hoặc thông tin bản ghi cũng phát/tạm dừng được như nút ▶.
+- Giao diện nhúng lên 8.0.7 để không bị OTA 8.0.6 cũ thay thế. Không thay giao thức OTA nativeApi=8.
+- Giữ minSdk 28 (Android 9) và cơ chế lưu trữ có thể chọn thư mục SAF.
+
 ## Giao diện 8.0.6 – Thư viện WAV trong ứng dụng
 
 - Đặt 📁 và ▶ cạnh phải tiêu đề **GHI THEO TIẾNG ĐỘNG**; mở ngay danh sách và nghe bản ghi vừa lưu.

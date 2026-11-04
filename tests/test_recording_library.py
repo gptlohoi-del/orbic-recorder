@@ -80,6 +80,13 @@ assert.deepStrictEqual(library.getList().map(x=>x.id),['file:new-voice','file:ne
 assert.strictEqual(nodes.recordingsList.children.length,3);
 assert.strictEqual(nodes.recordingsList.children[0].children[1].children[0].textContent,
  '1. orbic_20261105_120000_000_p001_voice.wav');
+// Both the small PLAY icon and the filename/details area trigger the same playback.
+const firstRow=nodes.recordingsList.children[0];
+assert.strictEqual(firstRow.children[1].tag,'button');
+firstRow.children[1].onclick();
+assert.deepStrictEqual(calls.pop(),['play','file:new-voice']);
+firstRow.children[0].onclick();
+assert.deepStrictEqual(calls.pop(),['play','file:new-voice']);
 // One tap on the latest shortcut opens the library AND plays the newest filtered WAV.
 nodes.playNewest.onclick();
 assert.deepStrictEqual(calls.pop(),['play','file:new-voice']);

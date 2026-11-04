@@ -6,10 +6,9 @@
 <link rel="stylesheet" href="app.css">
 </head><body>
 <main id="app" class="app" aria-label="Phát nhạc và ghi âm – màn hình cố định">
-  <header class="app-titlebar"><strong>ORBIC RECORDER</strong><button id="rotate180" class="rotate-button" type="button" aria-pressed="false" aria-label="Xoay giao diện ứng dụng đúng 180 độ" title="Xoay màn hình 180°">⤾ XOAY 180°</button></header>
-  <div class="music-stack">
+    <div class="music-stack">
     <section class="music panel" aria-label="Trình phát nhạc">
-      <div class="heading"><strong>♫ PHÁT NHẠC</strong></div>
+      <div class="heading"><strong>♫ PHÁT NHẠC</strong><button id="rotate180" class="rotate-button" type="button" aria-pressed="false" aria-label="Xoay giao diện ứng dụng đúng 180 độ" title="Xoay màn hình 180°">⤾ XOAY 180°</button></div>
       <div class="tracks">
         <div class="track"><button id="music1" type="button" class="btn primary">▶ BÀI 1</button><button id="chooseSong1" class="pick" type="button" aria-label="Chọn bài 1">📂</button><span id="song1" class="song">Chưa chọn</span></div>
         <div class="track"><span id="song2" class="song">Chưa chọn</span><button id="chooseSong2" class="pick" type="button" aria-label="Chọn bài 2">📂</button><button id="music2" type="button" class="btn primary">▶ BÀI 2</button></div>
@@ -39,7 +38,7 @@
         <button id="playNewest" class="record-quick-button" type="button" aria-label="Nghe bản ghi vừa lưu" title="▶ Nghe ngay bản ghi vừa lưu">▶</button>
       </div>
     </div>
-    <div class="wave-row"><div class="waveform" id="waveform" data-style="mirror" aria-label="Biểu đồ mức âm thanh và vạch ngưỡng phát hiện tiếng động">
+    <div class="wave-row"><div class="waveform" id="waveform" data-style="line" aria-label="Biểu đồ mức âm thanh và vạch ngưỡng phát hiện tiếng động">
       <div class="wave-bars" id="waveBars" aria-hidden="true"></div>
       <svg class="wave-line-svg" id="waveLineSvg" aria-hidden="true" viewBox="0 0 300 100" preserveAspectRatio="none">
         <defs><linearGradient id="waveFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2cefc3" stop-opacity=".37"/><stop offset="100%" stop-color="#2cefc3" stop-opacity=".01"/></linearGradient></defs>
@@ -63,13 +62,17 @@
         <p class="hint">Kiểu sóng âm (xem trước và chạm để chọn). Thay đổi tức thì, tự lưu; không thay đổi độ nhạy micro hay file WAV.</p>
         <div id="waveStylePicker" class="wave-style-picker" role="radiogroup" aria-label="Chọn kiểu sóng âm"></div>
         <div id="viewNumbers" class="numeric-list"></div><label class="selectline">Chủ đề <select id="theme"><option value="system">Theo hệ thống</option><option value="light">Sáng</option><option value="dark">Tối</option></select></label></details>
+      <details><summary>🔔 VÙNG THÔNG BÁO</summary>
+        <p class="hint">Điều chỉnh riêng kích thước chữ trong khung thông báo trên màn hình chính. Thay đổi tức thì và tự lưu.</p>
+        <div id="noticeNumbers" class="numeric-list"></div>
+      </details>
       <details open><summary>♫ PHÁT NHẠC</summary><div id="musicNumbers" class="numeric-list"></div><p class="hint">PAUSE/STOP nhạc sẽ tiếp tục phát và giảm âm về 0 trong thời gian đã chọn (tối đa bằng phần nhạc còn lại). Khi nhạc phát micro tắt, nhưng các nút ghi âm vẫn dùng được. Nếu phiên ghi còn chạy, nhạc dừng sẽ trở lại nghe tiếng động.</p></details>
       <details open><summary>🎙 GHI ÂM</summary>
-        <label class="checkline">Bật ngưỡng nhận diện âm thanh (lọc khoảng lặng) <input id="thresholdEnabled" type="checkbox" checked></label>
+        <label class="checkline">Bật ngưỡng nhận diện âm thanh (lọc khoảng lặng) <input id="thresholdEnabled" type="checkbox"></label>
         <p class="hint" id="thresholdSupport">Bỏ chọn để ghi liên tục, kể cả âm thanh nhỏ và khoảng lặng; vẫn dùng PAUSE/DỪNG và tắt micro khi phát nhạc. Có hiệu lực trong khoảng 100 ms.</p>
         <div id="recNumbers" class="numeric-list"></div>
         <label class="checkline">Lưu WAV gốc (kể cả khoảng lặng) <input id="backupRaw" type="checkbox"></label>
-        <label class="selectline">Chia file mỗi <select id="splitMinutes"><option value="1">1 phút</option><option value="5">5 phút</option><option value="10">10 phút</option><option value="15">15 phút</option><option value="30">30 phút</option><option value="60">60 phút</option></select></label>
+        <label class="selectline">Chia file mỗi <select id="splitMinutes"><option value="1">1 phút</option><option value="5">5 phút</option><option value="10">10 phút</option><option value="15">15 phút</option><option value="30">30 phút</option><option value="60" selected>60 phút</option></select></label>
       </details>
       <details open><summary>🛡 CHỐNG QUÁ TẢI ÂM THANH</summary>
         <label class="checkline">AGC tự động của Android (nếu thiết bị hỗ trợ) <input id="agcEnabled" type="checkbox"></label>
@@ -82,7 +85,7 @@
       </details>
 
       <details><summary>📁 LƯU TRỮ</summary><p class="hint" id="settingsFolder">Music/OrbicRecorder</p><div class="settings-buttons"><button id="playLast" class="btn outline" type="button">▶ NGHE BẢN GHI GẦN NHẤT</button></div><div class="settings-buttons"><button id="chooseFolder" class="btn outline" type="button">CHỌN THƯ MỤC WAV</button><button id="resetFolder" class="btn outline" type="button">MẶC ĐỊNH</button></div></details>
-      <details><summary>↻ CẬP NHẬT OTA</summary><p class="hint" id="otaMessage">Chưa kiểm tra</p><p class="hint" id="otaVersion">Giao diện 8.0.6</p><div class="settings-buttons"><button id="checkOta" class="btn outline" type="button">KIỂM TRA</button><button id="installOta" class="btn blue" disabled type="button">CẬP NHẬT</button><button id="rollback" class="btn outline" hidden type="button">QUAY LẠI</button></div><p class="hint" id="featureCompatibility">Đang kiểm tra các tính năng của APK...</p><p class="hint">OTA chỉ cập nhật HTML/CSS/JS có chữ ký. Chức năng Android native yêu cầu APK mới.</p></details>
+      <details><summary>↻ CẬP NHẬT OTA</summary><p class="hint" id="otaMessage">Chưa kiểm tra</p><p class="hint" id="otaVersion">Giao diện 8.0.7</p><div class="settings-buttons"><button id="checkOta" class="btn outline" type="button">KIỂM TRA</button><button id="installOta" class="btn blue" disabled type="button">CẬP NHẬT</button><button id="rollback" class="btn outline" hidden type="button">QUAY LẠI</button></div><p class="hint" id="featureCompatibility">Đang kiểm tra các tính năng của APK...</p><p class="hint">OTA chỉ cập nhật HTML/CSS/JS có chữ ký. Chức năng Android native yêu cầu APK mới.</p></details>
       <details><summary>🛠 NÂNG CAO · GIỚI HẠN THÔNG SỐ</summary><p class="hint">Đổi MIN, MAX, STEP và DEFAULT cho từng thông số. Giới hạn an toàn của Android vẫn được bảo vệ.</p><div id="advancedNumbers"></div><button id="resetLimits" class="btn outline" type="button">KHÔI PHỤC TOÀN BỘ GIỚI HẠN MẶC ĐỊNH</button></details>
       <p class="hint">Tất cả cài đặt lưu trong Android. Không cần bấm Lưu. Màn hình chính OneView không cuộn.</p>
     </div>
@@ -98,7 +101,7 @@
     <div class="recordings-summary"><span id="recordingsCount">Đang tải…</span><span id="recordingsFolder">Music/OrbicRecorder</span></div>
     <div class="recordings-list" id="recordingsList" aria-label="Danh sách WAV mới nhất nằm trên cùng"></div>
     <div class="recording-player" aria-label="Điều khiển nghe lại bản ghi">
-      <div class="recording-now" id="recordingNow">Chọn ▶ ở một bản ghi để nghe lại</div>
+      <div class="recording-now" id="recordingNow">Chạm vào tên file hoặc ▶ để nghe lại</div>
       <div class="recording-timeline"><input id="recordingSeek" type="range" min="0" max="1000" value="0" disabled aria-label="Tua vị trí phát bản ghi"><span id="recordingTime">00:00 / 00:00</span></div>
       <div class="recording-player-controls"><button class="btn outline" id="recordingPrevious" type="button" title="Bản ghi mới hơn" disabled>◀ TRƯỚC</button><button class="btn green" id="recordingPause" type="button" disabled>Ⅱ PAUSE</button><button class="btn outline" id="recordingNext" type="button" title="Bản ghi cũ hơn" disabled>SAU ▶</button><button class="btn red" id="recordingStop" type="button" disabled>■ STOP</button></div>
     </div>

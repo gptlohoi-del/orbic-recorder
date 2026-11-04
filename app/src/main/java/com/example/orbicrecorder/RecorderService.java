@@ -78,7 +78,7 @@ public class RecorderService extends Service {
                 .setContentTitle("Orbic Recorder v9.5 – Bản ghi an toàn")
                 .setContentText(stopping ? "Đang hoàn thiện WAV" : paused ? "Đang tạm dừng" :
                         musicHold ? "Micro tắt – nhạc đang phát" :
-                                config().getBoolean("thresholdEnabled", true) ?
+                                config().getBoolean("thresholdEnabled", false) ?
                                         "Đang lọc khoảng lặng" : "Đang ghi liên tục")
                 .setOnlyAlertOnce(true)
                 .setContentIntent(PendingIntent.getActivity(this, 0,
@@ -168,7 +168,7 @@ public class RecorderService extends Service {
                     paused = false;
                     state().edit().putBoolean("paused", false)
                             .putString("capture", musicHold ? "NHẠC ĐANG PHÁT – MICRO TẮT" :
-                                    config().getBoolean("thresholdEnabled", true)
+                                    config().getBoolean("thresholdEnabled", false)
                                             ? "ĐANG CHỜ TIẾNG ĐỘNG" : "ĐANG GHI LIÊN TỤC").apply();
                     notifyChanged();
                 }
@@ -206,7 +206,7 @@ public class RecorderService extends Service {
                     .putBoolean("overload", false).putString("agcStatus", startHeld ? "Đợi nhạc dừng" : hardwareAgcStatus)
                     .putBoolean("starting", false).putString("error", "")
                     .putString("capture", startHeld ? "NHẠC ĐANG PHÁT – MICRO TẮT" :
-                            config().getBoolean("thresholdEnabled", true)
+                            config().getBoolean("thresholdEnabled", false)
                                     ? "ĐANG CHỜ TIẾNG ĐỘNG" : "ĐANG GHI LIÊN TỤC")
                     .putString("activeSession", session)
                     .putString("priorUri", priorUri).putString("priorFile", priorFile)
@@ -324,15 +324,15 @@ public class RecorderService extends Service {
     private void captureLoop(String session) {
         SharedPreferences cfg = config();
         int threshold = cfg.getInt("threshold", -38);
-        boolean thresholdEnabled = cfg.getBoolean("thresholdEnabled", true);
+        boolean thresholdEnabled = cfg.getBoolean("thresholdEnabled", false);
         int confirm = Math.max(1, (cfg.getInt("minSpeech", 180) + FRAME_MS - 1) / FRAME_MS);
         int preFrames = Math.max(0, (cfg.getInt("pre", 1000) + FRAME_MS - 1) / FRAME_MS);
         int tailFrames = Math.max(1, (cfg.getInt("tail", 1000) + FRAME_MS - 1) / FRAME_MS);
         int warnFrames = Math.max(1, cfg.getInt("warnSeconds", 9999) * 1000 / FRAME_MS);
-        int splitMinutes = cfg.getInt("splitMinutes", 15);
-        if (splitMinutes < 1 || splitMinutes > 60) splitMinutes = 15;
+        int splitMinutes = cfg.getInt("splitMinutes", 60);
+        if (splitMinutes < 1 || splitMinutes > 60) splitMinutes = 60;
         long splitFrames = (long) splitMinutes * 60 * 1000 / FRAME_MS;
-        boolean saveRaw = cfg.getBoolean("backupRaw", true);
+        boolean saveRaw = cfg.getBoolean("backupRaw", false);
         AudioDynamics dynamics = new AudioDynamics();
         boolean limiter = cfg.getBoolean("limiterEnabled", true);
         boolean overloadWarn = cfg.getBoolean("overloadWarn", true);
@@ -377,7 +377,7 @@ public class RecorderService extends Service {
                     audio.startRecording();
                     state().edit().putBoolean("musicSuspended", false)
                             .putString("capture", paused ? "ĐANG TẠM DỪNG" :
-                                    cfg.getBoolean("thresholdEnabled", true)
+                                    cfg.getBoolean("thresholdEnabled", false)
                                             ? "ĐANG CHỜ TIẾNG ĐỘNG" : "ĐANG GHI LIÊN TỤC").apply();
                     pre.clear(); candidate.clear(); tail.clear();
                     wasPaused = false;
@@ -456,7 +456,7 @@ public class RecorderService extends Service {
                 // within five 20 ms frames without reopening the microphone.
                 if (elapsed % 5 == 0) {
                     threshold = cfg.getInt("threshold", -38);
-                    thresholdEnabled = cfg.getBoolean("thresholdEnabled", true);
+                    thresholdEnabled = cfg.getBoolean("thresholdEnabled", false);
                 }
                 boolean loud = !thresholdEnabled || db >= threshold;
                 silence = loud ? 0 : silence + 1;

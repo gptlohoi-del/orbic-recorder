@@ -4,7 +4,7 @@
 
 Tại dòng **🎙 GHI THEO TIẾNG ĐỘNG** (góc phải của cùng dòng):
 
-- **📁**: mở danh sách file WAV đã lưu **mới nhất ở đầu**, có số thứ tự, tên, ngày giờ, loại (đã lọc / gốc), và dung lượng. Chạm **▶** của một dòng để nghe bản ghi đó.
+- **📁**: mở danh sách file WAV đã lưu **mới nhất ở đầu**, có số thứ tự, tên, ngày giờ, loại (đã lọc / gốc), và dung lượng. Chạm **▶** hoặc **tên file / thông tin file** của một dòng để nghe bản ghi đó.
 - **▶**: tự tìm bản ghi WAV đã lưu mới nhất rồi phát ngay trong trình nghe lại.
 
 Trong cửa sổ thư viện có **TRƯỚC / PAUSE – TIẾP / SAU / STOP**, thanh **tua thời gian**, **↻ làm mới** và **✕ ĐÓNG**. Chạm dấu đóng **không dừng** bản ghi đang phát. Nếu muốn tắt âm thanh, dùng **STOP**. Trình phát nhạc trên màn hình chính vẫn hiển thị trạng thái phát để thuận tiện theo dõi.
@@ -26,6 +26,6 @@ File mới nhất được xác định theo ngày/giờ ghi có trong tên WAV;
 
 ## Cài đặt bản cập nhật
 
-Cần **build và cài APK mới** từ mã nguồn này, vì các hàm `recordings`, `playRecording` và `seekRecording` nằm trong Java native. Cập nhật OTA web *một mình* không kích hoạt tính năng trên APK cũ. Giao diện tích hợp đã được tăng lên **8.0.6** so với bản OTA 8.0.5 trước đó để APK mới chủ động dùng giao diện có hai nút này.
+Cần **build và cài APK mới** từ mã nguồn này, vì các hàm `recordings`, `playRecording` và `seekRecording` nằm trong Java native. Cập nhật OTA web *một mình* không kích hoạt tính năng trên APK cũ. Giao diện tích hợp đã được tăng lên **8.0.7** so với bản OTA 8.0.5 trước đó để APK mới chủ động dùng giao diện có hai nút này.
 
 Mã nguồn đã được kiểm tra tự động với Node/Python, bao gồm một bài kiểm thử riêng về sắp xếp mới nhất và điều khiển nghe lại. Trong môi trường tạo gói này chưa có Android SDK/Gradle để biên dịch và thử trực tiếp trên điện thoại; sau khi build cần kiểm tra thực tế với Android 9 và các phiên bản mới hơn.

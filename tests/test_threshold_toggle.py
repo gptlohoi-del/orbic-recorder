@@ -16,11 +16,11 @@ js = (ui / 'app.js').read_text(encoding='utf-8')
 css = (ui / 'app.css').read_text(encoding='utf-8')
 ota = (java / 'OtaManager.java').read_text(encoding='utf-8')
 
-# Existing users keep the old VAD behavior until they explicitly turn it off.
-assert 'data.put("thresholdEnabled", cfg.getBoolean("thresholdEnabled", true));' in activity
+# First-time configuration records continuously by default. Stored user choices take precedence.
+assert 'data.put("thresholdEnabled", cfg.getBoolean("thresholdEnabled", false));' in activity
 assert 'edit.putBoolean("thresholdEnabled", v.getBoolean("thresholdEnabled"))' in activity
-assert 'boolean thresholdEnabled = cfg.getBoolean("thresholdEnabled", true);' in service
-assert service.count('cfg.getBoolean("thresholdEnabled", true)') >= 2  # at start and every 5 frames
+assert 'boolean thresholdEnabled = cfg.getBoolean("thresholdEnabled", false);' in service
+assert service.count('cfg.getBoolean("thresholdEnabled", false)') >= 2  # at start and every 5 frames
 assert re.search(r'if \(elapsed % 5 == 0\) \{\s*threshold = cfg.getInt\("threshold", -38\);\s*thresholdEnabled = cfg.getBoolean', service)
 
 # Disabling VAD bypasses even a completely zeroed PCM frame, does not require
@@ -53,7 +53,7 @@ assert 'Cần cài APK v9.4.2' in js
 # OTA is still signed UI-only, using the same native API as existing APKs;
 # the old APK sees an inactive switch rather than a misleading promise.
 assert 'public static final int NATIVE_API = 8;' in ota
-assert 'public static final String BUILTIN_VERSION = "8.0.6";' in ota
+assert 'public static final String BUILTIN_VERSION = "8.0.7";' in ota
 assert 'private static final String[] FILES = {"index.html", "app.css", "app.js"};' in ota
 assert 'validSignature(manifest)' in ota
 subprocess.run(['node', '--check', str(ui / 'app.js')], check=True)

@@ -20,7 +20,7 @@ gradle = (root / 'app/build.gradle').read_text(encoding='utf-8')
 assert 'versionCode (150000 + githubRunNumber)' in gradle
 assert 'versionName (githubRunNumber > 0 ? "9.5.0.${githubRunNumber}"' in gradle
 assert 'ORBIC RECORDER v9.5.0' in activity
-assert 'public static final String BUILTIN_VERSION = "8.0.6"' in ota
+assert 'public static final String BUILTIN_VERSION = "8.0.7"' in ota
 assert '(!versionValid(current) || !newer(current, BUILTIN_VERSION) ||' in ota
 assert 'newer(BUILTIN_VERSION, previous)' in ota
 assert 'newer(BUILTIN_VERSION, old)' in ota
