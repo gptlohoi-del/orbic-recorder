@@ -1,4 +1,11 @@
-# ORBIC RECORDER v9.4 — 3 tính năng bổ sung (APK mới)
+**CẬP NHẬT 04/11/2026:** Để sửa nút **XOAY 180°** trên APK v9.4 qua **OTA** mà không cần cài lại, xem [`README-V9.4.1-SUA-XOAY-OTA.md`](README-V9.4.1-SUA-XOAY-OTA.md). Phải phát hành OTA có `nativeApi=8` và chữ ký khớp APK hiện hữu. Các phần hướng dẫn v5.x bên dưới chỉ mang tính tham khảo lịch sử.
+
+# ORBIC RECORDER v9.4.1 — sửa nút XOAY 180° (APK mới / OTA fallback)
+
+**Đọc trước:** [`README-V9.4.1-XOAY-180.md`](README-V9.4.1-XOAY-180.md) giải thích cách sửa native Android, cách cập nhật bằng OTA cho APK v9.4 cũ và hướng dẫn build full repo. Giao diện 3 bài hát, ghi WAV và nút vuốt DỪNG & KHÔNG LƯU được giữ nguyên.
+
+## Thông tin lịch sử v9.4
+
 
 **Mã nguồn đầy đủ, hướng dẫn build và quy trình cập nhật:** đọc [`README-V9.4-NANG-CAP.md`](README-V9.4-NANG-CAP.md). Bản v9.4 thêm xoay Android 180°, 3 bài nhạc chọn nhanh, và DỪNG & KHÔNG LƯU xác nhận bằng thao tác vuốt. OTA nativeApi 8, phiên bản nhúng 8.0.0, Android 9 trở lên.
 

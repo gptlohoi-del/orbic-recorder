@@ -6,4 +6,4 @@ published manifest in your existing GitHub repo.
 
 Keep all existing GitHub ota/latest.json and ota/bundles/*.zip files.
 Publishing workflow will automatically create signed ota/latest.json and
-ota/bundles/3.0.1.zip (or a newer version) using OTA_SIGNING_KEY_B64.
+ota/bundles/8.0.1.zip (or a newer version compatible with nativeApi 8) using OTA_SIGNING_KEY_B64.

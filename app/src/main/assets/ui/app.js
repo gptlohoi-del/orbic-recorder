@@ -224,7 +224,21 @@
   };
   for(const id of ['playLast','chooseFolder','resetFolder','checkOta','installOta','rollback'])
     $(id).onclick=()=>{if(id==='chooseFolder')closeSettings();send(id);};
-  $('rotate180').onclick=()=>send('rotate180');
+  // v9.4.1 native rotates the entire WebView with reliable touch mapping.
+  // In original v9.4 the Android orientation request may be silently ignored.
+  // OTA can patch that older APK with a CSS-only *app UI* fallback; NEVER call
+  // its broken native orientation action at the same time (would double-flip).
+  $('rotate180').onclick=()=>{
+    let hasFixedNative=false;
+    try {hasFixedNative=!!window.Orbic &&
+        typeof window.Orbic.supportsReliableRotation==='function' &&
+        window.Orbic.supportsReliableRotation()===true;
+    } catch(e) {hasFixedNative=false;}
+    if(hasFixedNative){send('rotate180');return;}
+    const turned=document.body.classList.toggle('software-rotated-180');
+    $('rotate180').textContent=turned?'↶ TRỞ LẠI':'⤾ XOAY 180°';
+    $('rotate180').setAttribute('aria-pressed',String(turned));
+  };
   for(const id of ['music1','music2','music3','chooseSong1','chooseSong2','chooseSong3','chooseOther','musicPause','musicStop'])
     $(id).onclick=()=>{
       if(id==='musicPause') send(current&&current.musicStatus==='paused'?'musicResume':'musicPause');
@@ -286,7 +300,11 @@
   });
   swipeThumb.addEventListener('pointermove',e=>{
     if(e.pointerId!==swipePointer)return;
-    swipeDistance=cap(e.clientX-swipeStart,0,maxSwipe());
+    // A CSS 180-degree rotation on the original APK reverses the visual
+    // horizontal direction but clientX still uses physical viewport axes.
+    // In the newer Android APK the WebView handles touch coordinates itself.
+    const direction=document.body.classList.contains('software-rotated-180')?-1:1;
+    swipeDistance=cap((e.clientX-swipeStart)*direction,0,maxSwipe());
     swipeThumb.style.transform='translateX('+swipeDistance+'px)';
     swipeFill.style.width=(swipeDistance+swipeThumb.offsetWidth/2)+'px';
     e.preventDefault();
@@ -317,6 +335,12 @@
       const playing=d.musicStatus!=='idle', changing=!!d.pendingMusic||!!d.pendingResume;
       const fading=d.musicStatus==='fadingPause'||d.musicStatus==='fadingStop';
       const stopped=!d.running;
+      // UI state is persisted by the native APK; older OTA-only APKs use the
+      // button's own CSS fallback state and must not have it overwritten.
+      if(typeof d.uiRotated180==='boolean'){
+        $('rotate180').textContent=d.uiRotated180?'↶ TRỞ LẠI':'⤾ XOAY 180°';
+        $('rotate180').setAttribute('aria-pressed',String(d.uiRotated180));
+      }
       setText('song1',d.song1Name||'Chưa chọn');setText('song2',d.song2Name||'Chưa chọn');setText('song3',d.song3Name||'Chưa chọn');
       setText('musicState',d.pendingResume?'Chờ tắt micro':d.pendingMusic?'Đang chuẩn bị':d.musicStatus==='fadingPause'?'Đang giảm âm để PAUSE':d.musicStatus==='fadingStop'?'Đang giảm âm để STOP':d.musicStatus==='playing'?'Đang phát':d.musicStatus==='paused'?'Tạm dừng':d.musicStatus==='loading'?'Đang mở bài':'Đã dừng');
       setText('nowPlaying',d.musicTitle||'Chưa phát bài nào');

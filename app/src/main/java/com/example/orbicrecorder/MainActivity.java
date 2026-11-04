@@ -6,9 +6,6 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.pm.ActivityInfo;
-import android.content.res.Configuration;
-import android.view.Surface;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
@@ -34,7 +31,7 @@ import java.util.Collections;
 
 /** Native recorder from v4 + OTA-updateable local HTML/CSS/JS user interface. */
 public class MainActivity extends Activity {
-    private static final String NATIVE_LABEL = "ORBIC RECORDER v9.4";
+    private static final String NATIVE_LABEL = "ORBIC RECORDER v9.4.1";
     private static final String LOCAL_ORIGIN = "https://appassets.androidplatform.net";
     private static final int REQUEST_MIC = 101;
     private static final int REQUEST_FOLDER = 102;
@@ -45,6 +42,8 @@ public class MainActivity extends Activity {
     private static final int REQUEST_MIC_MUSIC = 204;
     private final Handler mainThread = new Handler(Looper.getMainLooper());
     private WebView web;
+    // Native View rotation works even when the device refuses reverse portrait/landscape.
+    private boolean webRotated180;
     private OtaManager ota;
     private MusicPlayer music;
     private Uri queuedMusic;
@@ -69,6 +68,7 @@ public class MainActivity extends Activity {
         // API capability can be checked before opening the microphone or requesting permission.
         // True means the Android AGC effect is exposed, not that every input path can use it.
         agcSupported = detectAgcSupport();
+        webRotated180 = config().getBoolean("uiRotated180", false);
         music = new MusicPlayer(this, new MusicPlayer.Listener() {
             @Override public void ended() { onMusicEnded(); }
             @Override public void paused() { onMusicPaused(); }
@@ -149,6 +149,9 @@ public class MainActivity extends Activity {
             }
         });
         setContentView(web);
+        // WebView is the complete app UI; rotate this native View, not individual HTML panels.
+        // Android transforms touch coordinates together with the drawing.
+        web.setRotation(webRotated180 ? 180f : 0f);
         web.loadUrl(LOCAL_ORIGIN + "/index.html");
     }
 
@@ -191,32 +194,19 @@ public class MainActivity extends Activity {
         startService(new Intent(this, RecorderService.class).setAction(command));
     }
 
-    /** Rotate the actual Android display by 180 degrees, not CSS or 90 degrees.
-     * The 0/90/180/270 Surface rotations are relative to a device's natural
-     * orientation; this also handles devices whose natural orientation is landscape.
+    /**
+     * Flip the entire app exactly 180 degrees, with native touch-coordinate handling.
+     *
+     * v9.4 only called setRequestedOrientation(REVERSE_...). Some Android 9 firmware,
+     * kiosk modes and rotation policies ignore that request without reporting an error.
+     * Instead rotate the full-screen WebView itself; this works with sensor rotation
+     * enabled or disabled, both in portrait and landscape, and never turns 90 degrees.
+     * It does NOT rotate Android's status/navigation bars or other applications.
      */
     private void rotate180() {
-        int rotation = getWindowManager().getDefaultDisplay().getRotation();
-        int orientation = getResources().getConfiguration().orientation;
-        boolean naturalPortrait = (rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_180)
-                == (orientation == Configuration.ORIENTATION_PORTRAIT);
-        int requested;
-        if (naturalPortrait) {
-            switch (rotation) {
-                case Surface.ROTATION_0: requested = ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT; break;
-                case Surface.ROTATION_90: requested = ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE; break;
-                case Surface.ROTATION_180: requested = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT; break;
-                default: requested = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE; break;
-            }
-        } else {
-            switch (rotation) {
-                case Surface.ROTATION_0: requested = ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE; break;
-                case Surface.ROTATION_90: requested = ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT; break;
-                case Surface.ROTATION_180: requested = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE; break;
-                default: requested = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT; break;
-            }
-        }
-        setRequestedOrientation(requested);
+        webRotated180 = !webRotated180;
+        if (web != null) web.setRotation(webRotated180 ? 180f : 0f);
+        config().edit().putBoolean("uiRotated180", webRotated180).apply();
     }
 
     private void chooseFolder() {
@@ -415,6 +405,10 @@ public class MainActivity extends Activity {
     }
 
     private final class Bridge {
+        // UI can detect this new native implementation; older v9.4 APKs can still
+        // receive an OTA-only CSS fallback without double-rotating a new APK.
+        @JavascriptInterface public boolean supportsReliableRotation() { return true; }
+
         @JavascriptInterface public String snapshot() {
             JSONObject data = new JSONObject();
             SharedPreferences p = recorder(), cfg = config();
@@ -490,6 +484,7 @@ public class MainActivity extends Activity {
                 data.put("canRollback", ota.canRollback());
                 data.put("nativeApi", OtaManager.NATIVE_API);
                 data.put("nativeLabel", NATIVE_LABEL);
+                data.put("uiRotated180", webRotated180);
             } catch (Exception ignored) { }
             return data.toString();
         }

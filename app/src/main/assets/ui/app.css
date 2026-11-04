@@ -50,3 +50,12 @@
 .discard-dialog>.btn{width:100%;white-space:normal;min-height:42px}
 @media(orientation:landscape) and (max-height:510px){.app-titlebar{min-height:24px;font-size:10px}.rotate-button{min-height:24px;padding:2px 10px}.track:nth-child(3){min-height:31px}.discard-button{min-height:30px}.record{gap:3px}}
 @media(max-height:620px) and (orientation:portrait){.app-titlebar{min-height:27px}.rotate-button{min-height:27px}.track:nth-child(3){min-height:31px}.discard-button{min-height:30px}}
+
+/* OTA compatibility fallback for v9.4 APKs whose Android orientation request is
+ * ignored. Newer native APKs rotate the full-screen WebView instead, so they
+ * never activate this class. Rotate *body* to include modal dialogs and all panels.
+ * CSS transforms also transform hit testing/touch coordinates in the WebView. */
+body.software-rotated-180 {
+  transform: rotate(180deg);
+  transform-origin: 50% 50%;
+}
