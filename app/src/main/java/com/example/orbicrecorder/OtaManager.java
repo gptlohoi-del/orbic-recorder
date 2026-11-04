@@ -280,7 +280,8 @@ public final class OtaManager {
         if (busy || !preferences.contains("previous")) return false;
         String old = preferences.getString("previous", BUILTIN_VERSION);
         if (newer(BUILTIN_VERSION, old) ||
-                !BUILTIN_VERSION.equals(old) && (!versionValid(old) || !allPresent(bundleDir(old)))) {
+        (!BUILTIN_VERSION.equals(old) &&
+         (!versionValid(old) || !allPresent(bundleDir(old))))) {
             report("error", "Không tìm thấy bản giao diện trước");
             return false;
         }
