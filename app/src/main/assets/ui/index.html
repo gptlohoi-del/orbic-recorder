@@ -6,12 +6,14 @@
 <link rel="stylesheet" href="app.css">
 </head><body>
 <main id="app" class="app" aria-label="Phát nhạc và ghi âm – màn hình cố định">
+  <header class="app-titlebar"><strong>ORBIC RECORDER</strong><button id="rotate180" class="rotate-button" type="button" aria-label="Xoay màn hình đúng 180 độ" title="Xoay màn hình 180°">⤾ XOAY 180°</button></header>
   <div class="music-stack">
     <section class="music panel" aria-label="Trình phát nhạc">
       <div class="heading"><strong>♫ PHÁT NHẠC</strong></div>
       <div class="tracks">
         <div class="track"><button id="music1" type="button" class="btn primary">▶ BÀI 1</button><button id="chooseSong1" class="pick" type="button" aria-label="Chọn bài 1">📂</button><span id="song1" class="song">Chưa chọn</span></div>
         <div class="track"><span id="song2" class="song">Chưa chọn</span><button id="chooseSong2" class="pick" type="button" aria-label="Chọn bài 2">📂</button><button id="music2" type="button" class="btn primary">▶ BÀI 2</button></div>
+        <div class="track"><button id="music3" type="button" class="btn primary">▶ BÀI 3</button><button id="chooseSong3" class="pick" type="button" aria-label="Chọn bài 3">📂</button><span id="song3" class="song">Chưa chọn</span></div>
       </div>
       <div class="music-info"><span id="nowPlaying">Chưa phát bài nào</span><span id="musicTime">00:00 / 00:00</span></div>
       <div class="progress"><div id="progressFill"></div></div>
@@ -40,6 +42,7 @@
     </div><b id="db">— dBFS</b></div>
     <div class="threshold-controls"><span>Ngưỡng âm thanh</span><div><button id="thresholdMinus" type="button" aria-label="Giảm ngưỡng phát hiện">−</button><strong id="thresholdValue">−38 dBFS</strong><button id="thresholdPlus" type="button" aria-label="Tăng ngưỡng phát hiện">+</button></div></div>
     <div class="record-controls"><button id="start" class="btn green" type="button">● START</button><button id="pause" class="btn yellow" type="button" disabled>Ⅱ PAUSE</button><button id="stop" class="btn red" type="button" disabled>■ DỪNG &amp; LƯU</button></div>
+    <button id="discard" type="button" class="btn discard-button" disabled>✕ DỪNG &amp; KHÔNG LƯU</button>
   </section>
   <div class="error" id="error" hidden></div>
 </main>
@@ -69,7 +72,7 @@
       </details>
 
       <details><summary>📁 LƯU TRỮ</summary><p class="hint" id="settingsFolder">Music/OrbicRecorder</p><div class="settings-buttons"><button id="playLast" class="btn outline" type="button">▶ NGHE BẢN GHI GẦN NHẤT</button></div><div class="settings-buttons"><button id="chooseFolder" class="btn outline" type="button">CHỌN THƯ MỤC WAV</button><button id="resetFolder" class="btn outline" type="button">MẶC ĐỊNH</button></div></details>
-      <details><summary>↻ CẬP NHẬT OTA</summary><p class="hint" id="otaMessage">Chưa kiểm tra</p><p class="hint" id="otaVersion">Giao diện 7.0.0</p><div class="settings-buttons"><button id="checkOta" class="btn outline" type="button">KIỂM TRA</button><button id="installOta" class="btn blue" disabled type="button">CẬP NHẬT</button><button id="rollback" class="btn outline" hidden type="button">QUAY LẠI</button></div><p class="hint">OTA chỉ cập nhật HTML/CSS/JS có chữ ký. Chức năng Android native yêu cầu APK mới.</p></details>
+      <details><summary>↻ CẬP NHẬT OTA</summary><p class="hint" id="otaMessage">Chưa kiểm tra</p><p class="hint" id="otaVersion">Giao diện 8.0.0</p><div class="settings-buttons"><button id="checkOta" class="btn outline" type="button">KIỂM TRA</button><button id="installOta" class="btn blue" disabled type="button">CẬP NHẬT</button><button id="rollback" class="btn outline" hidden type="button">QUAY LẠI</button></div><p class="hint">OTA chỉ cập nhật HTML/CSS/JS có chữ ký. Chức năng Android native yêu cầu APK mới.</p></details>
       <details><summary>🛠 NÂNG CAO · GIỚI HẠN THÔNG SỐ</summary><p class="hint">Đổi MIN, MAX, STEP và DEFAULT cho từng thông số. Giới hạn an toàn của Android vẫn được bảo vệ.</p><div id="advancedNumbers"></div><button id="resetLimits" class="btn outline" type="button">KHÔI PHỤC TOÀN BỘ GIỚI HẠN MẶC ĐỊNH</button></details>
       <p class="hint">Tất cả cài đặt lưu trong Android. Không cần bấm Lưu. Màn hình chính OneView không cuộn.</p>
     </div>
@@ -77,5 +80,16 @@
   </section>
 </div>
 <div id="confirm" class="modal" hidden><div class="backdrop"></div><section class="confirm-box" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle"><h3 id="confirmTitle">Xác nhận</h3><p id="confirmText"></p><div class="settings-buttons"><button id="confirmCancel" class="btn outline" type="button">HỦY</button><button id="confirmYes" class="btn red" type="button">ĐỒNG Ý</button></div></section></div>
+<div id="discardModal" class="modal" hidden><div id="discardBackdrop" class="backdrop"></div>
+  <section class="discard-dialog" role="dialog" aria-modal="true" aria-labelledby="discardTitle">
+    <h3 id="discardTitle">DỪNG &amp; KHÔNG LƯU?</h3>
+    <p>Vuốt mũi tên từ trái sang phải đến hết thanh để <strong>hủy toàn bộ file WAV thuộc phiên ghi hiện tại</strong>, kể cả các đoạn đã xuất. Không thể hoàn tác.</p>
+    <div id="discardTrack" class="swipe-track" aria-label="Vuốt từ trái sang phải để xác nhận hủy">
+      <div class="swipe-fill" id="swipeFill"></div><span class="swipe-label">VUỐT SANG PHẢI ĐỂ HỦY →</span>
+      <div id="discardThumb" class="swipe-thumb" aria-hidden="true">➜</div>
+    </div>
+    <button id="cancelDiscard" class="btn outline" type="button">GIỮ LẠI BẢN GHI · HỦY THAO TÁC</button>
+  </section>
+</div>
 <script src="app.js"></script>
 </body></html>

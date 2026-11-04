@@ -32,8 +32,8 @@ import java.util.zip.ZipInputStream;
  * The installed APK pins the RSA public key. Private key is only in GitHub Actions secrets.
  */
 public final class OtaManager {
-    public static final int NATIVE_API = 7;
-    public static final String BUILTIN_VERSION = "7.0.0";
+    public static final int NATIVE_API = 8;
+    public static final String BUILTIN_VERSION = "8.0.0";
     private static final String MANIFEST_URL =
             "https://raw.githubusercontent.com/gptlohoi-del/orbic-recorder/main/ota/latest.json";
     private static final String BUNDLE_PREFIX =

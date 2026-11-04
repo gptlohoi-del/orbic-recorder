@@ -6,6 +6,9 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.ActivityInfo;
+import android.content.res.Configuration;
+import android.view.Surface;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
@@ -31,13 +34,14 @@ import java.util.Collections;
 
 /** Native recorder from v4 + OTA-updateable local HTML/CSS/JS user interface. */
 public class MainActivity extends Activity {
-    private static final String NATIVE_LABEL = "ORBIC RECORDER v9.3";
+    private static final String NATIVE_LABEL = "ORBIC RECORDER v9.4";
     private static final String LOCAL_ORIGIN = "https://appassets.androidplatform.net";
     private static final int REQUEST_MIC = 101;
     private static final int REQUEST_FOLDER = 102;
     private static final int REQUEST_MUSIC_1 = 201;
     private static final int REQUEST_MUSIC_2 = 202;
     private static final int REQUEST_MUSIC_OTHER = 203;
+    private static final int REQUEST_MUSIC_3 = 205;
     private static final int REQUEST_MIC_MUSIC = 204;
     private final Handler mainThread = new Handler(Looper.getMainLooper());
     private WebView web;
@@ -187,6 +191,34 @@ public class MainActivity extends Activity {
         startService(new Intent(this, RecorderService.class).setAction(command));
     }
 
+    /** Rotate the actual Android display by 180 degrees, not CSS or 90 degrees.
+     * The 0/90/180/270 Surface rotations are relative to a device's natural
+     * orientation; this also handles devices whose natural orientation is landscape.
+     */
+    private void rotate180() {
+        int rotation = getWindowManager().getDefaultDisplay().getRotation();
+        int orientation = getResources().getConfiguration().orientation;
+        boolean naturalPortrait = (rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_180)
+                == (orientation == Configuration.ORIENTATION_PORTRAIT);
+        int requested;
+        if (naturalPortrait) {
+            switch (rotation) {
+                case Surface.ROTATION_0: requested = ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT; break;
+                case Surface.ROTATION_90: requested = ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE; break;
+                case Surface.ROTATION_180: requested = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT; break;
+                default: requested = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE; break;
+            }
+        } else {
+            switch (rotation) {
+                case Surface.ROTATION_0: requested = ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE; break;
+                case Surface.ROTATION_90: requested = ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT; break;
+                case Surface.ROTATION_180: requested = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE; break;
+                default: requested = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT; break;
+            }
+        }
+        setRequestedOrientation(requested);
+    }
+
     private void chooseFolder() {
         if (recorder().getBoolean("running", false) || recorder().getBoolean("saving", false)) {
             toast("Hãy dừng ghi trước khi đổi thư mục");
@@ -225,7 +257,7 @@ public class MainActivity extends Activity {
             toast("Hãy chờ thao tác đang thực hiện hoàn tất"); return;
         }
         String saved = config().getString("song" + slot + "Uri", "");
-        if (saved.isEmpty()) { chooseMusic(slot == 1 ? REQUEST_MUSIC_1 : REQUEST_MUSIC_2); return; }
+        if (saved.isEmpty()) { chooseMusic(slot == 1 ? REQUEST_MUSIC_1 : slot == 2 ? REQUEST_MUSIC_2 : REQUEST_MUSIC_3); return; }
         queueSwitchMusic(Uri.parse(saved), musicName(slot), slot);
     }
 
@@ -396,6 +428,7 @@ public class MainActivity extends Activity {
                 music.writeSnapshot(data);
                 data.put("song1Name", musicName(1));
                 data.put("song2Name", musicName(2));
+                data.put("song3Name", musicName(3));
                 data.put("paused", p.getBoolean("paused", false));
                 data.put("saving", p.getBoolean("saving", false));
                 data.put("starting", p.getBoolean("starting", false));
@@ -467,9 +500,12 @@ public class MainActivity extends Activity {
                 switch (command) {
                     case "chooseSong1": chooseMusic(REQUEST_MUSIC_1); break;
                     case "chooseSong2": chooseMusic(REQUEST_MUSIC_2); break;
+                    case "chooseSong3": chooseMusic(REQUEST_MUSIC_3); break;
+                    case "rotate180": rotate180(); break;
                     case "chooseOther": chooseMusic(REQUEST_MUSIC_OTHER); break;
                     case "music1": playMusic(1); break;
                     case "music2": playMusic(2); break;
+                    case "music3": playMusic(3); break;
                     case "musicPause": music.requestPause(config().getInt("pauseStopFade", 2000)); break;
                     case "musicResume": resumeMusicSafely(); break;
                     case "musicStop":
@@ -494,6 +530,14 @@ public class MainActivity extends Activity {
                         musicShouldReturnListening = false;
                         listeningRestoreTicket++;
                         if (recorder().getBoolean("running", false)) sendRecorder("STOP");
+                        break;
+                    case "discard":
+                        // Only an explicit swipe gesture in the bundled UI sends this command.
+                        // Native service owns deletion; never delete the previous session.
+                        musicShouldReturnListening = false;
+                        listeningRestoreTicket++;
+                        if (recorder().getBoolean("running", false) &&
+                                !recorder().getBoolean("saving", false)) sendRecorder("STOP_DISCARD");
                         break;
                     case "chooseFolder": chooseFolder(); break;
                     case "resetFolder":
@@ -600,7 +644,7 @@ public class MainActivity extends Activity {
         super.onActivityResult(code, result, data);
         if (result != RESULT_OK || data == null || data.getData() == null) return;
         Uri uri = data.getData();
-        if (code == REQUEST_MUSIC_1 || code == REQUEST_MUSIC_2 || code == REQUEST_MUSIC_OTHER) {
+        if (code == REQUEST_MUSIC_1 || code == REQUEST_MUSIC_2 || code == REQUEST_MUSIC_3 || code == REQUEST_MUSIC_OTHER) {
             try {
                 getContentResolver().takePersistableUriPermission(uri,
                         data.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION);
@@ -613,7 +657,7 @@ public class MainActivity extends Activity {
             if (label == null || label.isEmpty()) label = "Bài nhạc";
             if (code == REQUEST_MUSIC_OTHER) queueSwitchMusic(uri, label, 0);
             else {
-                int slot = code == REQUEST_MUSIC_1 ? 1 : 2;
+                int slot = code == REQUEST_MUSIC_1 ? 1 : code == REQUEST_MUSIC_2 ? 2 : 3;
                 config().edit().putString("song" + slot + "Uri", uri.toString())
                         .putString("song" + slot + "Name", label).apply();
                 toast("Đã lưu bài mặc định " + slot + ": " + label);

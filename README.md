@@ -1,3 +1,11 @@
+# ORBIC RECORDER v9.4 — 3 tính năng bổ sung (APK mới)
+
+**Mã nguồn đầy đủ, hướng dẫn build và quy trình cập nhật:** đọc [`README-V9.4-NANG-CAP.md`](README-V9.4-NANG-CAP.md). Bản v9.4 thêm xoay Android 180°, 3 bài nhạc chọn nhanh, và DỪNG & KHÔNG LƯU xác nhận bằng thao tác vuốt. OTA nativeApi 8, phiên bản nhúng 8.0.0, Android 9 trở lên.
+
+**Lưu ý:** Các phần bên dưới là lịch sử hướng dẫn của v9.3 và cũ hơn. Để build APK v9.4, ưu tiên tài liệu v9.4 ở trên.
+
+---
+
 ## Sửa lỗi GitHub Actions `android:icon` / `aapt dump badging`
 
 Bản này thay icon hệ thống `@android:drawable/ic_btn_speak_now` trong `AndroidManifest.xml` thành icon **đóng gói ngay trong APK**: `@mipmap/ic_launcher` (5 mật độ màn hình trong `app/src/main/res/mipmap-*/ic_launcher.png`). Nhờ vậy công cụ `aapt dump badging` có thể đọc icon từ gói ứng dụng, tránh lỗi `attribute value reference does not exist` tại bước xác minh APK. **Không cần thay đổi ngưỡng Android 9 (`minSdk 28`), mã Java, hay OTA.** Sau khi cập nhật, hãy chạy lại workflow **Tạo APK Orbic Recorder**; không phải chạy OTA.

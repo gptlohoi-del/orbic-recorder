@@ -42,6 +42,7 @@ public class RecorderService extends Service {
     private volatile boolean stopping;
     private volatile boolean musicHold;
     private volatile boolean saveRequested;
+    private volatile boolean discardRequested;
     private AudioRecord audio;
     private AutomaticGainControl hardwareAgc;
     private boolean hardwareAgcSetting;
@@ -98,6 +99,25 @@ public class RecorderService extends Service {
                     startCapture("START_HELD".equals(action));
                 }
                 break;
+            case "STOP_DISCARD":
+                if (recording && !stopping) {
+                    String session = state().getString("activeSession", "");
+                    try {
+                        // Durable marker must be flushed BEFORE recording stops.
+                        // Crash recovery will never re-publish abandoned audio.
+                        RecordingArchive.markDiscard(this, session);
+                        discardRequested = true;
+                        stopping = true;
+                        recording = false;
+                        state().edit().putBoolean("saving", true)
+                                .putString("capture", "ĐANG HỦY VÀ XÓA WAV PHIÊN NÀY").apply();
+                        notifyChanged();
+                    } catch (IOException error) {
+                        stateValue("error", "Không thể đánh dấu hủy an toàn: " + error.getMessage()
+                                + ". Vẫn đang ghi; hãy dùng DỪNG & LƯU.");
+                    }
+                }
+                break;
             case "STOP":
                 if (recording) {
                     stopping = true;
@@ -152,6 +172,10 @@ public class RecorderService extends Service {
         try {
             SharedPreferences cfg = config();
             String session = RecordingArchive.makeSessionId();
+            // Preserve previous recording metadata so discard cannot clear it.
+            String priorUri = state().getString("uri", "");
+            String priorFile = state().getString("file", "Chưa có bản ghi");
+            String priorRaw = state().getString("lastRaw", "");
             RecordingArchive.saveSession(this, session, cfg.getString("treeUri", ""),
                     cfg.getString("folderLabel", "Music/OrbicRecorder"));
             // Không lấy quyền AudioRecord nếu phát nhạc đang diễn ra.
@@ -164,12 +188,16 @@ public class RecorderService extends Service {
             stopping = false;
             musicHold = startHeld;
             saveRequested = false;
+            discardRequested = false;
             AudioDeviceInfo device = audio == null ? null : audio.getRoutedDevice();
             state().edit().putBoolean("running", true).putBoolean("saving", false)
                     .putBoolean("paused", false).putBoolean("musicSuspended", startHeld)
                     .putBoolean("overload", false).putString("agcStatus", startHeld ? "Đợi nhạc dừng" : hardwareAgcStatus)
                     .putBoolean("starting", false).putString("error", "")
                     .putString("capture", startHeld ? "NHẠC ĐANG PHÁT – MICRO TẮT" : "ĐANG CHỜ TIẾNG ĐỘNG")
+                    .putString("activeSession", session)
+                    .putString("priorUri", priorUri).putString("priorFile", priorFile)
+                    .putString("priorLastRaw", priorRaw)
                     .putString("file", "Đang ghi phiên " + session)
                     .putLong("elapsedMs", 0).putLong("keptMs", 0)
                     .putInt("segments", 0).putInt("savedParts", 0)
@@ -489,12 +517,13 @@ public class RecorderService extends Service {
                     .putBoolean("overload", false).putInt("level", 0)
                     .putLong("elapsedMs", elapsed * FRAME_MS)
                     .putLong("keptMs", kept * 1000L / RecordingArchive.BYTES_PER_SEC)
-                    .putInt("segments", segments).putString("capture", "ĐANG LƯU FILE").apply();
+                    .putInt("segments", segments).putString("capture",
+                            discardRequested ? "ĐANG XÓA WAV PHIÊN NÀY" : "ĐANG LƯU FILE").apply();
             releaseMicrophone();
             if (current != null) {
                 try {
                     RecordingArchive.close(current);
-                    RecordingArchive.queueExport(this, current);
+                    if (!discardRequested) RecordingArchive.queueExport(this, current);
                 } catch (IOException failure) {
                     stateValue("error", "Không hoàn thiện WAV: " + failure.getMessage()
                             + ". Giữ lại file tạm để khôi phục.");
@@ -506,9 +535,31 @@ public class RecorderService extends Service {
             } catch (Exception failure) {
                 stateValue("error", "Xuất WAV chưa hoàn tất: " + failure.getMessage());
             }
+            boolean discarded = discardRequested;
+            boolean deleteOk = true;
+            if (discarded) {
+                // All queued export jobs have finished: delete only THIS session.
+                deleteOk = RecordingArchive.discardSession(this, session);
+            }
             stopping = false;
             musicHold = false;
-            state().edit().putBoolean("musicSuspended", false).putBoolean("saving", false).putString("capture", "ĐÃ DỪNG").apply();
+            discardRequested = false;
+            SharedPreferences.Editor finished = state().edit()
+                    .putBoolean("musicSuspended", false).putBoolean("saving", false)
+                    .putString("activeSession", "")
+                    .putString("capture", discarded
+                            ? (deleteOk ? "ĐÃ DỪNG & KHÔNG LƯU" : "⚠ CÒN FILE CHƯA XÓA")
+                            : "ĐÃ DỪNG");
+            if (discarded) {
+                finished.putString("uri", state().getString("priorUri", ""))
+                        .putString("file", state().getString("priorFile", "Chưa có bản ghi"))
+                        .putString("lastRaw", state().getString("priorLastRaw", ""))
+                        .putInt("savedParts", 0);
+                if (!deleteOk) finished.putString("error", "Một số file phiên vừa hủy chưa xóa được; "
+                        + "ứng dụng sẽ thử xóa khi mở lại. Kiểm tra thư mục WAV.");
+                else finished.putString("error", "");
+            }
+            finished.remove("priorUri").remove("priorFile").remove("priorLastRaw").apply();
             PROCESS_CAPTURING.set(false);
             stopForeground(true);
             stopSelf();

@@ -20,7 +20,7 @@ OUT = ROOT / 'ota'
 FILES = ('index.html', 'app.css', 'app.js')
 OWNER = 'gptlohoi-del'
 REPO = 'orbic-recorder'
-NATIVE_API = 7
+NATIVE_API = 8
 VERSION_RE = re.compile(r'[0-9]{1,5}\.[0-9]{1,5}\.[0-9]{1,5}\Z')
 
 

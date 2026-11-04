@@ -1,6 +1,9 @@
 package com.example.orbicrecorder;
 
 import android.content.ContentValues;
+import android.database.Cursor;
+import android.provider.OpenableColumns;
+import android.util.Base64;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.net.Uri;
@@ -16,6 +19,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.RandomAccessFile;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.Properties;
@@ -170,6 +176,150 @@ public final class RecordingArchive {
 
     public static Future<?> barrier() { return DISK.submit(() -> {}); }
 
+    // Tombstone + destination journal are always in private staging storage.
+    private static File sessionFile(Context context, String session, String suffix) throws IOException {
+        if (session == null || !session.matches("[0-9]{8}_[0-9]{6}_[0-9]{3}"))
+            throw new IOException("Mã phiên ghi không hợp lệ");
+        return new File(folder(context), PREFIX + session + suffix);
+    }
+
+    public static void markDiscard(Context context, String session) throws IOException {
+        File marker = sessionFile(context, session, ".discard");
+        try (FileOutputStream output = new FileOutputStream(marker)) {
+            output.write("DO_NOT_EXPORT\n".getBytes(StandardCharsets.UTF_8));
+            output.getFD().sync();
+        }
+    }
+
+    private static boolean isDiscardMarked(Context context, String session) {
+        try { return sessionFile(context, session, ".discard").isFile(); }
+        catch (IOException ignored) { return false; }
+    }
+
+    private static void rememberExport(Context context, String session, Uri destination) throws IOException {
+        if (session == null || session.isEmpty()) return; // legacy recovery
+        File log = sessionFile(context, session, ".exports");
+        byte[] address = destination.toString().getBytes(StandardCharsets.UTF_8);
+        byte[] entry = (Base64.encodeToString(address, Base64.NO_WRAP) + "\n")
+                .getBytes(StandardCharsets.UTF_8);
+        try (FileOutputStream output = new FileOutputStream(log, true)) {
+            output.write(entry);
+            output.getFD().sync();
+        }
+    }
+
+    private static boolean deleteDestination(Context context, Uri uri, String prefix) {
+        try {
+            if ("file".equals(uri.getScheme())) {
+                File file = new File(uri.getPath()).getCanonicalFile();
+                File base = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC);
+                if (base == null) base = context.getFilesDir();
+                String root = base.getCanonicalPath() + File.separator;
+                if (!file.getPath().startsWith(root) || !file.getName().startsWith(prefix)) return false;
+                return !file.exists() || file.delete();
+            }
+            if (!"content".equals(uri.getScheme())) return false;
+            // SAF providers often implement deleteDocument(), not delete(Uri).
+            try {
+                if (DocumentsContract.isDocumentUri(context, uri) &&
+                        DocumentsContract.deleteDocument(context.getContentResolver(), uri)) return true;
+            } catch (Exception ignored) { /* fall back to provider delete */ }
+            try {
+                if (context.getContentResolver().delete(uri, null, null) > 0) return true;
+            } catch (Exception ignored) { /* check whether it was already removed */ }
+            // Idempotence: a previously deleted destination should not block recovery.
+            try (InputStream check = context.getContentResolver().openInputStream(uri)) {
+                return check == null;
+            } catch (java.io.FileNotFoundException gone) {
+                return true;
+            }
+        } catch (Exception ignored) { return false; }
+    }
+
+    // Reconciliation handles a process crash between making the export visible
+    // and writing the destination URI to the journal.
+    private static boolean removeFromMediaStore(Context context, String prefix) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return true;
+        try {
+            Uri root = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+            List<Uri> matches = new ArrayList<>();
+            try (Cursor cursor = context.getContentResolver().query(root,
+                    new String[]{MediaStore.Audio.Media._ID, MediaStore.Audio.Media.DISPLAY_NAME,
+                            MediaStore.Audio.Media.RELATIVE_PATH},
+                    MediaStore.Audio.Media.DISPLAY_NAME + " LIKE ?", new String[]{prefix + "%"}, null)) {
+                if (cursor != null) while (cursor.moveToNext()) {
+                    String name = cursor.getString(1), rel = cursor.getString(2);
+                    if (name != null && name.startsWith(prefix) && rel != null &&
+                            rel.startsWith(Environment.DIRECTORY_MUSIC + "/OrbicRecorder/"))
+                        matches.add(android.content.ContentUris.withAppendedId(root, cursor.getLong(0)));
+                }
+            }
+            boolean ok = true;
+            for (Uri target : matches) if (!deleteDestination(context, target, prefix)) ok = false;
+            return ok;
+        } catch (Exception ignored) { return false; }
+    }
+
+    private static boolean removeFromChosenFolder(Context context, String session, String prefix) {
+        String treeString = sessionSettings(context, session).getProperty("treeUri", "");
+        if (treeString.isEmpty()) return true;
+        try {
+            Uri tree = Uri.parse(treeString);
+            Uri children = DocumentsContract.buildChildDocumentsUriUsingTree(tree,
+                    DocumentsContract.getTreeDocumentId(tree));
+            List<Uri> matches = new ArrayList<>();
+            try (Cursor cursor = context.getContentResolver().query(children,
+                    new String[]{DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                            DocumentsContract.Document.COLUMN_DISPLAY_NAME}, null, null, null)) {
+                if (cursor != null) while (cursor.moveToNext()) {
+                    String id = cursor.getString(0), name = cursor.getString(1);
+                    if (name != null && name.startsWith(prefix) && name.endsWith(".wav"))
+                        matches.add(DocumentsContract.buildDocumentUriUsingTree(tree, id));
+                }
+            }
+            boolean ok = true;
+            for (Uri uri : matches) if (!deleteDestination(context, uri, prefix)) ok = false;
+            return ok;
+        } catch (Exception ignored) { return false; }
+    }
+
+    /** Must run only after worker has stopped AND all export jobs have passed barrier().
+     * If a provider refuses deletion, keep the .discard tombstone for later retry.
+     */
+    public static boolean discardSession(Context context, String session) {
+        try {
+            String prefix = PREFIX + session + "_p";
+            File log = sessionFile(context, session, ".exports");
+            boolean ok = true;
+            if (log.isFile()) {
+                List<String> lines = java.nio.file.Files.readAllLines(log.toPath(), StandardCharsets.UTF_8);
+                for (String line : lines) {
+                    if (line.isEmpty()) continue;
+                    try {
+                        Uri uri = Uri.parse(new String(Base64.decode(line, Base64.NO_WRAP), StandardCharsets.UTF_8));
+                        if (!deleteDestination(context, uri, prefix)) ok = false;
+                    } catch (Exception error) { ok = false; }
+                }
+            }
+            // Best-effort provider enumeration also covers any crash window.
+            if (!removeFromMediaStore(context, prefix)) ok = false;
+            if (!removeFromChosenFolder(context, session, prefix)) ok = false;
+            File[] staged = folder(context).listFiles((dir, name) -> name.startsWith(prefix) &&
+                    (name.endsWith(".wav") || name.endsWith(".pending")));
+            if (staged != null) for (File file : staged) if (!file.delete()) ok = false;
+            if (ok) {
+                if (log.isFile() && !log.delete()) ok = false;
+                File meta = sessionFile(context, session, ".properties");
+                if (meta.isFile() && !meta.delete()) ok = false;
+                File marker = sessionFile(context, session, ".discard");
+                if (ok && marker.isFile() && !marker.delete()) ok = false;
+            }
+            return ok;
+        } catch (Exception error) {
+            return false;
+        }
+    }
+
     /** Run only while recorder is inactive. Never touch an actively written WAV. */
     public static void recoverOnLaunch(Context context) {
         if (RecorderService.isProcessCapturing() || !RECOVERING.compareAndSet(false, true)) return;
@@ -180,6 +330,32 @@ public final class RecordingArchive {
             int recovered = 0;
             int failed = 0;
             try {
+                // First retry abandoned-session cleanup after crashes/power loss.
+                File[] discarded = folder(application).listFiles((dir, name) ->
+                        name.startsWith(PREFIX) && name.endsWith(".discard"));
+                if (discarded != null) for (File marker : discarded) {
+                    String session = marker.getName().substring(PREFIX.length(),
+                            marker.getName().length() - ".discard".length());
+                    boolean removed = discardSession(application, session);
+                    if (!removed) failed++;
+                    // If the application was killed before service cleanup finished,
+                    // restore the previous recording link instead of pointing at a deleted WAV.
+                    SharedPreferences prefs = state(application);
+                    if (session.equals(prefs.getString("activeSession", ""))) {
+                        SharedPreferences.Editor restore = prefs.edit()
+                                .putString("uri", prefs.getString("priorUri", ""))
+                                .putString("file", prefs.getString("priorFile", "Chưa có bản ghi"))
+                                .putString("lastRaw", prefs.getString("priorLastRaw", ""))
+                                .putString("activeSession", "")
+                                .putBoolean("saving", false).putBoolean("running", false)
+                                .putInt("savedParts", 0)
+                                .putString("capture", removed
+                                        ? "ĐÃ HỦY PHIÊN GHI TRƯỚC" : "⚠ CẦN KIỂM TRA FILE CHƯA XÓA");
+                        if (!removed) restore.putString("error", "Không xóa hết WAV phiên trước. "
+                                + "Sẽ thử lại khi khởi động; kiểm tra thư mục lưu.");
+                        restore.remove("priorUri").remove("priorFile").remove("priorLastRaw").apply();
+                    }
+                }
                 File[] leftovers = folder(application).listFiles((dir, name) ->
                         name.endsWith(".wav") && (name.startsWith(PREFIX) || name.startsWith("orbic_voice_")));
                 if (leftovers != null) {
@@ -221,7 +397,8 @@ public final class RecordingArchive {
             // Preserve original first: a filtered file can always be recreated from raw.
             if (segment.rawFile != null) exportFile(context, segment.rawFile, segment.session);
             exportFile(context, segment.voiceFile, segment.session);
-            state(context).edit().putInt("savedParts", segment.part).apply();
+            if (!isDiscardMarked(context, segment.session))
+                state(context).edit().putInt("savedParts", segment.part).apply();
         } catch (Exception e) {
             state(context).edit().putString("error", "Lưu đoạn " + segment.part
                     + " thất bại; file tạm được giữ để khôi phục: " + e.getMessage()).apply();
@@ -264,6 +441,10 @@ public final class RecordingArchive {
 
     private static void exportFile(Context context, File source, String session) throws Exception {
         if (source == null || !source.exists()) return;
+        if (!session.isEmpty() && isDiscardMarked(context, session)) {
+            if (!source.delete()) throw new IOException("Không xóa được WAV đã hủy");
+            return;
+        }
         repairHeader(source);
         // Empty voice files are expected for segments without speech.
         if (source.length() <= 44) {
@@ -289,6 +470,14 @@ public final class RecordingArchive {
             destination = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
                     ? exportToMusic(context, source, raw)
                     : exportToAppMusic(context, source, raw);
+        }
+        // Durable URI log must be written before deleting the staging source.
+        rememberExport(context, session, destination);
+        if (!session.isEmpty() && isDiscardMarked(context, session)) {
+            if (!deleteDestination(context, destination, PREFIX + session + "_p"))
+                throw new IOException("File đã hủy nhưng chưa xóa được: " + destination);
+            if (!source.delete()) throw new IOException("Không thể xóa WAV tạm sau hủy");
+            return;
         }
         SharedPreferences.Editor editor = state(context).edit();
         if (raw) editor.putString("lastRaw", source.getName());

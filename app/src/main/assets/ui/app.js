@@ -224,12 +224,13 @@
   };
   for(const id of ['playLast','chooseFolder','resetFolder','checkOta','installOta','rollback'])
     $(id).onclick=()=>{if(id==='chooseFolder')closeSettings();send(id);};
-  for(const id of ['music1','music2','chooseSong1','chooseSong2','chooseOther','musicPause','musicStop'])
+  $('rotate180').onclick=()=>send('rotate180');
+  for(const id of ['music1','music2','music3','chooseSong1','chooseSong2','chooseSong3','chooseOther','musicPause','musicStop'])
     $(id).onclick=()=>{
       if(id==='musicPause') send(current&&current.musicStatus==='paused'?'musicResume':'musicPause');
-      else if((id==='music1'||id==='music2') && current &&
+      else if((id==='music1'||id==='music2'||id==='music3') && current &&
           current.musicStatus!=='idle') {
-        const song=id==='music1'?'Bài 1':'Bài 2';
+        const song=id==='music1'?'Bài 1':id==='music2'?'Bài 2':'Bài 3';
         confirmAction('Chuyển sang '+song+'?',
           'Bài đang phát sẽ giảm dần âm lượng rồi mới chuyển bài. Bản ghi vẫn được giữ an toàn.',id);
       } else send(id);
@@ -259,6 +260,47 @@
     else confirmAction('Tạm dừng ghi âm?','Ghi âm sẽ ngừng thủ công và chỉ tiếp tục khi bạn bấm TIẾP TỤC.','pause');
   };
   $('stop').onclick=()=>confirmAction('Dừng và lưu phiên ghi?','Toàn bộ âm thanh đã thu sẽ được hoàn tất và lưu WAV. Phiên lắng nghe sẽ dừng nhưng nhạc đang phát vẫn tiếp tục.','stop');
+  // Confirmation requires a real pointer drag across the track.
+  // A tap or a partial swipe can NEVER call the native discard action.
+  const swipeTrack=$('discardTrack'), swipeThumb=$('discardThumb'), swipeFill=$('swipeFill');
+  let swipePointer=null, swipeStart=0, swipeDistance=0;
+  function resetSwipe(){
+    swipePointer=null; swipeDistance=0;
+    swipeThumb.style.transform='translateX(0px)';
+    swipeFill.style.width='0px';
+    swipeTrack.classList.remove('dragging');
+  }
+  function closeDiscard(){ $('discardModal').hidden=true;resetSwipe(); }
+  $('discard').onclick=()=>{
+    if(!current||!current.running||current.saving||current.starting)return;
+    resetSwipe();$('discardModal').hidden=false;
+  };
+  $('cancelDiscard').onclick=$('discardBackdrop').onclick=closeDiscard;
+  function maxSwipe(){return Math.max(0,swipeTrack.clientWidth-swipeThumb.offsetWidth-8);}
+  swipeThumb.addEventListener('pointerdown',e=>{
+    if(swipePointer!==null||$('discardModal').hidden)return;
+    swipePointer=e.pointerId;swipeStart=e.clientX;swipeDistance=0;
+    swipeTrack.classList.add('dragging');
+    swipeThumb.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  swipeThumb.addEventListener('pointermove',e=>{
+    if(e.pointerId!==swipePointer)return;
+    swipeDistance=cap(e.clientX-swipeStart,0,maxSwipe());
+    swipeThumb.style.transform='translateX('+swipeDistance+'px)';
+    swipeFill.style.width=(swipeDistance+swipeThumb.offsetWidth/2)+'px';
+    e.preventDefault();
+  });
+  swipeThumb.addEventListener('pointerup',e=>{
+    if(e.pointerId!==swipePointer)return;
+    const completed=maxSwipe()>0 && swipeDistance>=maxSwipe()*.92;
+    resetSwipe();
+    if(completed && current && current.running && !current.saving && !current.starting){
+      $('discardModal').hidden=true;
+      send('discard');
+    }
+  });
+  swipeThumb.addEventListener('pointercancel',resetSwipe);
   function confirmAction(title,message,action){
     setText('confirmTitle',title);setText('confirmText',message);pendingConfirm=action;$('confirm').hidden=false;
   }
@@ -275,7 +317,7 @@
       const playing=d.musicStatus!=='idle', changing=!!d.pendingMusic||!!d.pendingResume;
       const fading=d.musicStatus==='fadingPause'||d.musicStatus==='fadingStop';
       const stopped=!d.running;
-      setText('song1',d.song1Name||'Chưa chọn');setText('song2',d.song2Name||'Chưa chọn');
+      setText('song1',d.song1Name||'Chưa chọn');setText('song2',d.song2Name||'Chưa chọn');setText('song3',d.song3Name||'Chưa chọn');
       setText('musicState',d.pendingResume?'Chờ tắt micro':d.pendingMusic?'Đang chuẩn bị':d.musicStatus==='fadingPause'?'Đang giảm âm để PAUSE':d.musicStatus==='fadingStop'?'Đang giảm âm để STOP':d.musicStatus==='playing'?'Đang phát':d.musicStatus==='paused'?'Tạm dừng':d.musicStatus==='loading'?'Đang mở bài':'Đã dừng');
       setText('nowPlaying',d.musicTitle||'Chưa phát bài nào');
       setText('musicTime',shortTime(d.musicPosition)+' / '+shortTime(d.musicDuration));
@@ -283,16 +325,20 @@
       $('musicPause').disabled=!playing||d.musicStatus==='loading'||fading||changing;
       $('musicPause').textContent=d.musicStatus==='paused'?'▶ TIẾP':'Ⅱ PAUSE';
       $('musicStop').disabled=!playing&&!changing;
-      $('music1').disabled=$('music2').disabled=changing||!!d.saving||!!d.starting;
+      $('music1').disabled=$('music2').disabled=$('music3').disabled=changing||!!d.saving||!!d.starting;
       $('chooseOther').disabled=changing||!!d.saving||!!d.starting;
       $('music1').classList.toggle('active-song',playing && d.activeSlot===1);
       $('music2').classList.toggle('active-song',playing && d.activeSlot===2);
+      $('music3').classList.toggle('active-song',playing && d.activeSlot===3);
       // Điều khiển ghi âm độc lập với điều khiển nhạc.
       // Android sẽ giữ micro tắt trong suốt thời gian nhạc phát.
       $('start').disabled=!!d.running||!!d.saving||!!d.recovering||!!d.starting;
       $('pause').disabled=stopped||!!d.saving||!!d.starting;
       $('pause').textContent=d.paused?'▶ TIẾP TỤC':'Ⅱ PAUSE';
       $('stop').disabled=stopped||!!d.saving||!!d.starting;
+      $('discard').disabled=stopped||!!d.saving||!!d.starting;
+      if(!stopped && d.saving && !$('discardModal').hidden)closeDiscard();
+      if(stopped && !$('discardModal').hidden)closeDiscard();
       // Native APK v9.1+ provides a device-level AGC availability flag even before START.
       setText('agcSupport',typeof d.agcSupported==='boolean'
         ? (d.agcSupported?'CÓ HỖ TRỢ (API Android)':'KHÔNG HỖ TRỢ (API Android)')
@@ -307,7 +353,7 @@
       setText('settingsFolder',d.folder||'Music/OrbicRecorder');
       setText('error',d.error||'');$('error').hidden=!d.error;
       if(d.error) setText('capture','⚠ '+d.error);
-      setText('otaVersion','Giao diện '+(d.otaVersion||'7.0.0'));setText('otaMessage',d.otaMessage||'Chưa kiểm tra');
+      setText('otaVersion','Giao diện '+(d.otaVersion||'8.0.0'));setText('otaMessage',d.otaMessage||'Chưa kiểm tra');
       $('installOta').disabled=!d.otaAvailable||d.otaStatus!=='available'||d.running||d.saving||playing||changing;
       $('rollback').hidden=!d.canRollback;
       levels.shift();levels.push(d.running&&!d.paused&&!d.musicAudible&&!changing&&!d.musicSuspended?cap(Number(d.level||0),0,100):0);
