@@ -5,6 +5,7 @@ import android.media.audiofx.AutomaticGainControl;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
@@ -20,6 +21,9 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
+import android.widget.FrameLayout;
+import android.view.Gravity;
+import android.content.Context;
 
 import org.json.JSONObject;
 
@@ -31,7 +35,7 @@ import java.util.Collections;
 
 /** Native recorder from v4 + OTA-updateable local HTML/CSS/JS user interface. */
 public class MainActivity extends Activity {
-    private static final String NATIVE_LABEL = "ORBIC RECORDER v9.5.1 · TỰ ĐỘNG OTA";
+    private static final String NATIVE_LABEL = "ORBIC RECORDER v9.5.2 · XOAY THỦ CÔNG";
     private static final String LOCAL_ORIGIN = "https://appassets.androidplatform.net";
     private static final int REQUEST_MIC = 101;
     private static final int REQUEST_FOLDER = 102;
@@ -41,8 +45,9 @@ public class MainActivity extends Activity {
     private static final int REQUEST_MUSIC_3 = 205;
     private final Handler mainThread = new Handler(Looper.getMainLooper());
     private WebView web;
-    // Native View rotation works even when the device refuses reverse portrait/landscape.
-    private boolean webRotated180;
+    private RotationFrame webFrame;
+    // 0/90/180/270: rotate the whole interactive WebView, independent of sensors.
+    private int uiRotationDegrees;
     private OtaManager ota;
     private MusicPlayer music;
     private Uri queuedMusic;
@@ -78,7 +83,11 @@ public class MainActivity extends Activity {
         // API capability can be checked before opening the microphone or requesting permission.
         // True means the Android AGC effect is exposed, not that every input path can use it.
         agcSupported = detectAgcSupport();
-        webRotated180 = config().getBoolean("uiRotated180", false);
+        int savedRotation = config().getInt("uiRotationDegrees",
+                config().getBoolean("uiRotated180", false) ? 180 : 0);
+        uiRotationDegrees = savedRotation == 90 || savedRotation == 180 || savedRotation == 270
+                ? savedRotation : 0;
+        applyScreenOrientation(config().getBoolean("autoRotateEnabled", false));
         music = new MusicPlayer(this, new MusicPlayer.Listener() {
             @Override public void ended() { onMusicEnded(); }
             @Override public void paused() { onMusicPaused(); }
@@ -189,10 +198,14 @@ public class MainActivity extends Activity {
                 }
             }
         });
-        setContentView(web);
-        // WebView is the complete app UI; rotate this native View, not individual HTML panels.
-        // Android transforms touch coordinates together with the drawing.
-        web.setRotation(webRotated180 ? 180f : 0f);
+        webFrame = new RotationFrame(this);
+        webFrame.addView(web, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER));
+        setContentView(webFrame);
+        // Re-measure the WebView at 90°/270° to fill the original screen after rotation.
+        // Android View handles touch mapping, including controls and dialogs.
+        webFrame.post(this::applyWebRotation);
         web.loadUrl(LOCAL_ORIGIN + "/index.html");
     }
 
@@ -235,20 +248,55 @@ public class MainActivity extends Activity {
         startService(new Intent(this, RecorderService.class).setAction(command));
     }
 
-    /**
-     * Flip the entire app exactly 180 degrees, with native touch-coordinate handling.
-     *
-     * v9.4 only called setRequestedOrientation(REVERSE_...). Some Android 9 firmware,
-     * kiosk modes and rotation policies ignore that request without reporting an error.
-     * Instead rotate the full-screen WebView itself; this works with sensor rotation
-     * enabled or disabled, both in portrait and landscape, and never turns 90 degrees.
-     * It does NOT rotate Android's status/navigation bars or other applications.
+    /** Toggle physical sensor rotation: OFF locks the app upright in portrait.
+     * This does not change the separate manual 90°/180° WebView rotation.
+     * Changes to orientation are requested on the activity main thread only.
      */
-    private void rotate180() {
-        webRotated180 = !webRotated180;
-        if (web != null) web.setRotation(webRotated180 ? 180f : 0f);
-        config().edit().putBoolean("uiRotated180", webRotated180).apply();
+    private void applyScreenOrientation(boolean enabled) {
+        setRequestedOrientation(enabled ? ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+                : ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
     }
+
+    /**
+     * A rotated WebView must exchange its measured width and height at 90°/270°.
+     * Without this, the layout is cropped on portrait Android 9 devices.
+     */
+    private void applyWebRotation() {
+        if (web == null || webFrame == null) return;
+        final int width = webFrame.getWidth(), height = webFrame.getHeight();
+        if (width <= 0 || height <= 0) return;
+        boolean quarterTurn = (uiRotationDegrees % 180) != 0;
+        int targetWidth = quarterTurn ? height : width;
+        int targetHeight = quarterTurn ? width : height;
+        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) web.getLayoutParams();
+        if (params.width != targetWidth || params.height != targetHeight) {
+            params.width = targetWidth;
+            params.height = targetHeight;
+            params.gravity = Gravity.CENTER;
+            web.setLayoutParams(params);
+        }
+        web.setRotation((float) uiRotationDegrees);
+    }
+
+    /** Re-apply swapped dimensions when Android changes the device orientation. */
+    private final class RotationFrame extends FrameLayout {
+        RotationFrame(Context context) { super(context); }
+        @Override protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+            super.onSizeChanged(w, h, oldw, oldh);
+            if (w != oldw || h != oldh) post(MainActivity.this::applyWebRotation);
+        }
+    }
+
+    private void rotateBy(int deltaDegrees) {
+        uiRotationDegrees = (uiRotationDegrees + deltaDegrees) % 360;
+        applyWebRotation();
+        // Retain the old 180° preference for interoperability with older OTA UI.
+        config().edit().putInt("uiRotationDegrees", uiRotationDegrees)
+                .putBoolean("uiRotated180", uiRotationDegrees == 180).apply();
+    }
+
+    private void rotate90() { rotateBy(90); }
+    private void rotate180() { rotateBy(180); }
 
     private void chooseFolder() {
         if (recorder().getBoolean("running", false) || recorder().getBoolean("saving", false)) {
@@ -466,6 +514,7 @@ public class MainActivity extends Activity {
         // UI can detect this new native implementation; older v9.4 APKs can still
         // receive an OTA-only CSS fallback without double-rotating a new APK.
         @JavascriptInterface public boolean supportsReliableRotation() { return true; }
+        @JavascriptInterface public boolean supportsQuarterTurn() { return true; }
 
         @JavascriptInterface public String snapshot() {
             JSONObject data = new JSONObject();
@@ -545,7 +594,10 @@ public class MainActivity extends Activity {
                 data.put("canRollback", ota.canRollback());
                 data.put("nativeApi", OtaManager.NATIVE_API);
                 data.put("nativeLabel", NATIVE_LABEL);
-                data.put("uiRotated180", webRotated180);
+                data.put("uiRotated180", uiRotationDegrees == 180);
+                data.put("uiRotationDegrees", uiRotationDegrees);
+                data.put("supportsRotation90", true);
+                data.put("autoRotateEnabled", cfg.getBoolean("autoRotateEnabled", false));
                 // Capability negotiation allows HTML OTA to avoid displaying
                 // destructive/native-only buttons on unsupported old APKs.
                 data.put("supportsThirdTrack", true);
@@ -582,6 +634,7 @@ public class MainActivity extends Activity {
                     case "chooseSong1": chooseMusic(REQUEST_MUSIC_1); break;
                     case "chooseSong2": chooseMusic(REQUEST_MUSIC_2); break;
                     case "chooseSong3": chooseMusic(REQUEST_MUSIC_3); break;
+                    case "rotate90": rotate90(); break;
                     case "rotate180": rotate180(); break;
                     case "chooseOther": chooseMusic(REQUEST_MUSIC_OTHER); break;
                     case "music1": playMusic(1); break;
@@ -687,6 +740,11 @@ public class MainActivity extends Activity {
                           waveStyle.equals("line") || waveStyle.equals("dots")))
                         throw new IllegalArgumentException("Kiểu sóng âm không hợp lệ");
                     edit.putString("waveStyle", waveStyle);
+                }
+                if (v.has("autoRotateEnabled")) {
+                    boolean enabled = v.getBoolean("autoRotateEnabled");
+                    edit.putBoolean("autoRotateEnabled", enabled);
+                    runOnUiThread(() -> applyScreenOrientation(enabled));
                 }
                 if (v.has("backupRaw")) edit.putBoolean("backupRaw", v.getBoolean("backupRaw"));
                 if (v.has("autoOtaEnabled")) {

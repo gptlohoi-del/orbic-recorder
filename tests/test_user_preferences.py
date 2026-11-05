@@ -67,8 +67,8 @@ assert 'details.setAttribute(\'aria-label\',\'Nghe bản ghi \'+item.name)' in j
 assert 'recording-file-details:focus-visible' in css
 assert 'recordings.sort((a,b)' in js
 
-assert 'BUILTIN_VERSION = "8.0.8"' in ota
-assert 'NATIVE_API = 8' in ota
+assert 'BUILTIN_VERSION = "8.0.9"' in ota
+assert 'NATIVE_API = 9' in ota
 assert 'minSdk 28' in (root/'app/build.gradle').read_text(encoding='utf-8')
 subprocess.run(['node','--check',str(ui/'app.js')],check=True)
 print('PASS: single heading, settings font, 4 native defaults, tap filename, OTA, API 28')

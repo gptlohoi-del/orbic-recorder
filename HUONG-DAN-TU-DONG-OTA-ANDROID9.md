@@ -1,3 +1,5 @@
+> **Cập nhật v9.5.2:** Khóa xoay cảm biến mặc định TẮT, bật trong Cài đặt → Giao diện. Hai nút 90° và 180° thay đổi native Android, cần build/cài APK 9.5.2 một lần. Phiên bản native OTA API của APK mới là **9**, giao diện nhúng **8.0.9**. Các ví dụ nativeApi 8 bên dưới chỉ dành cho APK thế hệ v9.5.1; khi phát hành OTA cho APK v9.5.2, manifest phải dùng `nativeApi=9` và phiên bản **8.0.10 trở lên**, ký bằng khóa OTA hiện hành. Không sửa manifest/gói cũ thủ công vì chữ ký sẽ sai.
+
 # HƯỚNG DẪN – TỰ ĐỘNG CẬP NHẬT OTA TRÊN ANDROID 9
 
 ## 1. Hoạt động như thế nào?

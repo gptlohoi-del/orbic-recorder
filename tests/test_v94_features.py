@@ -11,7 +11,7 @@ html = (web / 'index.html').read_text()
 js = (web / 'app.js').read_text()
 css = (web / 'app.css').read_text()
 ota = (java / 'OtaManager.java').read_text()
-assert 'web.setRotation(webRotated180 ? 180f : 0f);' in activity
+assert 'web.setRotation((float) uiRotationDegrees);' in activity
 assert 'supportsReliableRotation()' in activity
 assert 'uiRotated180' in activity
 assert 'case "rotate180": rotate180();' in activity
@@ -33,7 +33,7 @@ assert 'if (!session.isEmpty() && isDiscardMarked(context, session))' in archive
 assert 'removeFromMediaStore(context, prefix)' in archive
 assert 'removeFromChosenFolder(context, session, prefix)' in archive
 assert 'restore.remove("priorUri")' in archive
-assert 'public static final int NATIVE_API = 8;' in ota
-assert 'public static final String BUILTIN_VERSION = "8.0.8";' in ota
-assert 'versionCode (160000 + githubRunNumber)' in (root/'app/build.gradle').read_text()
+assert 'public static final int NATIVE_API = 9;' in ota
+assert 'public static final String BUILTIN_VERSION = "8.0.9";' in ota
+assert 'versionCode (170000 + githubRunNumber)' in (root/'app/build.gradle').read_text()
 print('PASS: backward compatibility for v9.4.2 reliable rotation, 3 tracks, swipe confirm, crash-safe session discard, OTA boundary')

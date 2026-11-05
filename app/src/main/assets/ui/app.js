@@ -226,6 +226,12 @@
     applyWaveStyle(data.waveStyle);
     specs.forEach(s=>document.querySelector(`[data-key="${s.key}"]`).updateViews());
     $('theme').value=data.theme;
+    const supportsAutoRotate=typeof current.autoRotateEnabled==='boolean';
+    $('autoRotateEnabled').disabled=!supportsAutoRotate;
+    $('autoRotateEnabled').checked=supportsAutoRotate?current.autoRotateEnabled:false;
+    setText('autoRotateHelp',supportsAutoRotate
+      ? 'Mặc định TẮT. Bật để xoay theo cảm biến điện thoại; khi tắt ứng dụng khóa màn hình theo chiều dọc. Hai nút XOAY 90° / 180° luôn hoạt động độc lập.'
+      : 'Cần cài APK mới để thay đổi tự xoay theo cảm biến. Chỉ cập nhật OTA giao diện là chưa đủ.');
     $('backupRaw').checked=current.backupRaw===true;
     updateThresholdSupport(current);
     for(const key of ['agcEnabled','limiterEnabled','overloadWarn']) $(key).checked=current[key]!==false;
@@ -245,6 +251,12 @@
   $('closeSettings').onclick=$('closeBottom').onclick=$('modalBackdrop').onclick=closeSettings;
   $('theme').onchange=()=>{data.theme=$('theme').value;save({theme:data.theme});applyTheme();};
   $('backupRaw').onchange=()=>save({backupRaw:$('backupRaw').checked});
+  $('autoRotateEnabled').onchange=()=>{
+    if(!current || typeof current.autoRotateEnabled!=='boolean')return;
+    current.autoRotateEnabled=$('autoRotateEnabled').checked;
+    save({autoRotateEnabled:current.autoRotateEnabled});
+    setText('saveStatus',current.autoRotateEnabled?'Đã bật tự xoay theo điện thoại':'Đã khóa tự xoay (vẫn xoay thủ công được)');
+  };
   $('autoOtaEnabled').onchange=()=>{
     if(!current || typeof current.autoOtaEnabled!=='boolean')return;
     current.autoOtaEnabled=$('autoOtaEnabled').checked;
@@ -275,6 +287,11 @@
   // In original v9.4 the Android orientation request may be silently ignored.
   // OTA can patch that older APK with a CSS-only *app UI* fallback; NEVER call
   // its broken native orientation action at the same time (would double-flip).
+  $('rotate90').onclick=()=>{
+    // 90° depends on swapped native WebView dimensions; do not emulate it with
+    // an ordinary CSS transform on old APKs (would crop/touch-misalign).
+    if(current && current.supportsRotation90===true)send('rotate90');
+  };
   $('rotate180').onclick=()=>{
     let hasFixedNative=false;
     try {hasFixedNative=!!window.Orbic &&
@@ -559,14 +576,22 @@
           Date.now()-discardRequestedAt>8000)) discardPending=false;
       const hasArchive=d.supportsRecordingLibrary===true;
       setText('featureCompatibility',hasSong3&&hasDiscard&&hasArchive
-        ? 'APK hỗ trợ 3 bài nhạc, xoay 180°, hủy phiên ghi và thư viện nghe lại WAV.'
+        ? 'APK hỗ trợ phát nhạc, xoay thủ công, hủy phiên ghi và nghe lại WAV.'
         : 'Cần cài APK mới để dùng đầy đủ BÀI 3, HỦY và THƯ VIỆN GHI ÂM. Chỉ cập nhật giao diện OTA là chưa đủ.');
       $('openRecordings').disabled=$('playNewest').disabled=!hasArchive;
       $('music3').textContent=hasSong3?'▶ BÀI 3':'BÀI 3 · APK MỚI';
       $('discard').textContent=hasDiscard?'✕ DỪNG & KHÔNG LƯU':'✕ CẦN APK MỚI ĐỂ HỦY';
       // UI state is persisted by the native APK; older OTA-only APKs use the
       // button's own CSS fallback state and must not have it overwritten.
-      if(typeof d.uiRotated180==='boolean'){
+      const hasQuarterTurn=d.supportsRotation90===true && typeof d.uiRotationDegrees==='number';
+      $('rotate90').disabled=!hasQuarterTurn;
+      $('rotate90').title=hasQuarterTurn?'Xoay thêm 90° theo chiều kim đồng hồ':'Cần cài APK mới để xoay 90°';
+      if(hasQuarterTurn){
+        const degrees=((d.uiRotationDegrees%360)+360)%360;
+        $('rotate90').setAttribute('aria-label','Xoay thêm 90 độ; hiện tại '+degrees+' độ');
+        $('rotate180').textContent=degrees===180?'↶ TRỞ LẠI':'⤾ XOAY 180°';
+        $('rotate180').setAttribute('aria-pressed',String(degrees===180));
+      } else if(typeof d.uiRotated180==='boolean'){
         $('rotate180').textContent=d.uiRotated180?'↶ TRỞ LẠI':'⤾ XOAY 180°';
         $('rotate180').setAttribute('aria-pressed',String(d.uiRotated180));
       }
@@ -614,7 +639,7 @@
       updateRecordingPlayer(d);
       setText('error',d.error||'');$('error').hidden=!d.error;
       if(d.error) setText('capture','⚠ '+d.error);
-      setText('otaVersion','Giao diện '+(d.otaVersion||'8.0.8'));setText('otaMessage',d.otaMessage||'Chưa kiểm tra');
+      setText('otaVersion','Giao diện '+(d.otaVersion||'8.0.9'));setText('otaMessage',d.otaMessage||'Chưa kiểm tra');
       if(!settingsOpened){
         const supportsAutoOta=typeof d.autoOtaEnabled==='boolean';
         $('autoOtaEnabled').disabled=!supportsAutoOta;

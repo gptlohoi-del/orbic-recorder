@@ -1,3 +1,9 @@
+## v9.5.2 — 2026-11-05
+- Tự xoay màn hình theo cảm biến **TẮT theo mặc định**, có công tắc bật/tắt trong Setting → GIAO DIỆN.
+- Nút XOAY 90° màu cam nằm bên trái XOAY 180° màu xanh; quay từng bước 90°, giữ chạm/tương tác WebView chính xác.
+- Không đè OTA thế hệ cũ (nativeApi 9, bundled UI 8.0.9).
+- minSdk Android 9 vẫn là 28.
+
 ## v9.5.1 – Tự động OTA an toàn (2026-11-05)
 
 - Trong Settings → CẬP NHẬT OTA, thêm công tắc **TỰ ĐỘNG CẬP NHẬT OTA**, mặc định BẬT, tự lưu trong Android.

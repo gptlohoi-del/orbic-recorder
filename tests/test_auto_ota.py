@@ -38,9 +38,9 @@ assert '.remove("autoSkippedVersion").commit()' in manager
 assert 'validSignature(manifest)' in manager
 assert 'if (!hash(archive).equals(manifest.getString("sha256")))' in manager
 assert '"downloading".equals(ota.getStatus())' in activity
-assert 'public static final String BUILTIN_VERSION = "8.0.8"' in manager
-assert 'public static final int NATIVE_API = 8' in manager
-assert 'minSdk 28' in gradle and 'versionCode (160000 + githubRunNumber)' in gradle
+assert 'public static final String BUILTIN_VERSION = "8.0.9"' in manager
+assert 'public static final int NATIVE_API = 9' in manager
+assert 'minSdk 28' in gradle and 'versionCode (170000 + githubRunNumber)' in gradle
 assert 'max(newest, version_tuple(older))' in publisher
 assert 'ota/latest.json' in (root / 'HUONG-DAN-TU-DONG-OTA-ANDROID9.md').read_text()
 # Automatic updater cannot start when the UI/activity is paused.

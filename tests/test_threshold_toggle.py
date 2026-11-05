@@ -52,8 +52,8 @@ assert 'Cần cài APK v9.4.2' in js
 
 # OTA is still signed UI-only, using the same native API as existing APKs;
 # the old APK sees an inactive switch rather than a misleading promise.
-assert 'public static final int NATIVE_API = 8;' in ota
-assert 'public static final String BUILTIN_VERSION = "8.0.8";' in ota
+assert 'public static final int NATIVE_API = 9;' in ota
+assert 'public static final String BUILTIN_VERSION = "8.0.9";' in ota
 assert 'private static final String[] FILES = {"index.html", "app.css", "app.js"};' in ota
 assert 'validSignature(manifest)' in ota
 subprocess.run(['node', '--check', str(ui / 'app.js')], check=True)

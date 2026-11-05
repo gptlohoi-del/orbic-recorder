@@ -14,15 +14,15 @@ js = (root / 'app/src/main/assets/ui/app.js').read_text()
 css = (root / 'app/src/main/assets/ui/app.css').read_text()
 manifest = (root / 'app/src/main/AndroidManifest.xml').read_text()
 
-assert 'webRotated180 = config().getBoolean("uiRotated180", false)' in activity
-assert 'web.setRotation(webRotated180 ? 180f : 0f);' in activity
-assert 'webRotated180 = !webRotated180;' in activity
-assert 'putBoolean("uiRotated180", webRotated180)' in activity
-assert 'data.put("uiRotated180", webRotated180);' in activity
+assert 'uiRotationDegrees = savedRotation == 90 || savedRotation == 180 || savedRotation == 270' in activity
+assert 'config().getBoolean("uiRotated180", false) ? 180 : 0' in activity
+assert 'web.setRotation((float) uiRotationDegrees);' in activity
+assert 'private void rotate180() { rotateBy(180); }' in activity
+assert 'putBoolean("uiRotated180", uiRotationDegrees == 180)' in activity
+assert 'data.put("uiRotated180", uiRotationDegrees == 180);' in activity
 assert '@JavascriptInterface public boolean supportsReliableRotation() { return true; }' in activity
 assert 'case "rotate180": rotate180(); break;' in activity
-assert '    setRequestedOrientation(' not in activity  # The previous unreliable mechanism must not return.
-assert 'android:screenOrientation="fullSensor"' in manifest  # Sensor rotation still works.
+assert 'android:screenOrientation="portrait"' in manifest  # The user can opt into sensor rotation.
 assert 'body.software-rotated-180' in css and 'rotate(180deg)' in css
 assert 'aria-pressed' in js
 assert "document.body.classList.contains('software-rotated-180')?-1:1" in js

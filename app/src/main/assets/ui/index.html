@@ -8,7 +8,7 @@
 <main id="app" class="app" aria-label="Phát nhạc và ghi âm – màn hình cố định">
     <div class="music-stack">
     <section class="music panel" aria-label="Trình phát nhạc">
-      <div class="heading"><strong>♫ PHÁT NHẠC</strong><button id="rotate180" class="rotate-button" type="button" aria-pressed="false" aria-label="Xoay giao diện ứng dụng đúng 180 độ" title="Xoay màn hình 180°">⤾ XOAY 180°</button></div>
+      <div class="heading"><strong>♫ PHÁT NHẠC</strong><div class="rotation-actions"><button id="rotate90" class="rotate-button rotate-90" type="button" aria-label="Xoay giao diện thêm 90 độ" title="Xoay thêm 90° theo chiều kim đồng hồ">↻ XOAY 90°</button><button id="rotate180" class="rotate-button" type="button" aria-pressed="false" aria-label="Xoay giao diện ứng dụng thêm 180 độ" title="Xoay thêm 180°">⤾ XOAY 180°</button></div></div>
       <div class="tracks">
         <div class="track"><button id="music1" type="button" class="btn primary">▶ BÀI 1</button><button id="chooseSong1" class="pick" type="button" aria-label="Chọn bài 1">📂</button><span id="song1" class="song">Chưa chọn</span></div>
         <div class="track"><span id="song2" class="song">Chưa chọn</span><button id="chooseSong2" class="pick" type="button" aria-label="Chọn bài 2">📂</button><button id="music2" type="button" class="btn primary">▶ BÀI 2</button></div>
@@ -61,6 +61,8 @@
       <details open><summary>🎨 GIAO DIỆN</summary>
         <p class="hint">Kiểu sóng âm (xem trước và chạm để chọn). Thay đổi tức thì, tự lưu; không thay đổi độ nhạy micro hay file WAV.</p>
         <div id="waveStylePicker" class="wave-style-picker" role="radiogroup" aria-label="Chọn kiểu sóng âm"></div>
+        <label class="checkline">Tự động xoay màn hình theo điện thoại <input id="autoRotateEnabled" type="checkbox"></label>
+        <p class="hint" id="autoRotateHelp">Mặc định TẮT: màn hình không tự xoay khi bạn nghiêng điện thoại. Nút XOAY 90° và XOAY 180° vẫn dùng bình thường.</p>
         <div id="viewNumbers" class="numeric-list"></div><label class="selectline">Chủ đề <select id="theme"><option value="system">Theo hệ thống</option><option value="light">Sáng</option><option value="dark">Tối</option></select></label></details>
       <details><summary>🔔 VÙNG THÔNG BÁO</summary>
         <p class="hint">Điều chỉnh riêng kích thước chữ trong khung thông báo trên màn hình chính. Thay đổi tức thì và tự lưu.</p>
@@ -88,7 +90,7 @@
       <details><summary>↻ CẬP NHẬT OTA</summary>
         <label class="checkline">TỰ ĐỘNG CẬP NHẬT OTA <input id="autoOtaEnabled" type="checkbox" checked></label>
         <p class="hint" id="autoOtaHelp">Mặc định BẬT. Tự kiểm tra khi mở ứng dụng; chỉ cài khi không ghi âm, lưu WAV hoặc phát nhạc.</p>
-        <p class="hint" id="otaMessage">Chưa kiểm tra</p><p class="hint" id="otaVersion">Giao diện 8.0.8</p><div class="settings-buttons"><button id="checkOta" class="btn outline" type="button">KIỂM TRA</button><button id="installOta" class="btn blue" disabled type="button">CẬP NHẬT</button><button id="rollback" class="btn outline" hidden type="button">QUAY LẠI</button></div><p class="hint" id="featureCompatibility">Đang kiểm tra các tính năng của APK...</p><p class="hint">OTA chỉ cập nhật HTML/CSS/JS có chữ ký. Chức năng Android native yêu cầu APK mới.</p></details>
+        <p class="hint" id="otaMessage">Chưa kiểm tra</p><p class="hint" id="otaVersion">Giao diện 8.0.9</p><div class="settings-buttons"><button id="checkOta" class="btn outline" type="button">KIỂM TRA</button><button id="installOta" class="btn blue" disabled type="button">CẬP NHẬT</button><button id="rollback" class="btn outline" hidden type="button">QUAY LẠI</button></div><p class="hint" id="featureCompatibility">Đang kiểm tra các tính năng của APK...</p><p class="hint">OTA chỉ cập nhật HTML/CSS/JS có chữ ký. Chức năng Android native yêu cầu APK mới.</p></details>
       <details><summary>🛠 NÂNG CAO · GIỚI HẠN THÔNG SỐ</summary><p class="hint">Đổi MIN, MAX, STEP và DEFAULT cho từng thông số. Giới hạn an toàn của Android vẫn được bảo vệ.</p><div id="advancedNumbers"></div><button id="resetLimits" class="btn outline" type="button">KHÔI PHỤC TOÀN BỘ GIỚI HẠN MẶC ĐỊNH</button></details>
       <p class="hint">Tất cả cài đặt lưu trong Android. Không cần bấm Lưu. Màn hình chính OneView không cuộn.</p>
     </div>

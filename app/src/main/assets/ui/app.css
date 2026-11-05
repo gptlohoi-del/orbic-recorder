@@ -93,3 +93,10 @@ body.software-rotated-180 {
 .recording-player-controls .btn{font-size:10px;min-height:36px;min-width:0;padding:4px 2px}
 @media(max-width:355px){.record-quick-actions{gap:2px}.record-quick-actions #recordState{max-width:44px;font-size:8px}.record-quick-button{width:27px;height:27px;min-height:27px}.recordings-dialog .dialog-header{padding:8px}.recordings-dialog .dialog-header h2{font-size:14px}}
 @media(orientation:landscape) and (max-height:510px){.record-quick-button{width:27px;height:25px;min-height:25px}.recordings-dialog{max-height:97dvh}.recordings-list{min-height:40px}}
+
+/* v9.5.2: independent manual quarter-turn, contrasting amber 90° button. */
+.rotation-actions{display:flex;align-items:center;justify-content:flex-end;gap:5px;min-width:0;flex-shrink:0}
+.rotation-actions .rotate-button{padding:3px 7px;font-size:10px}
+.rotation-actions .rotate-90{background:#a85b09;border-color:#925108;color:#fff}
+.rotation-actions .rotate-button:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+@media(max-width:350px){.rotation-actions{gap:3px}.rotation-actions .rotate-button{padding:3px 5px;font-size:9px}}
