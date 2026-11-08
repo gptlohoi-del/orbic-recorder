@@ -29,7 +29,20 @@ assert 'final boolean saveRaw = automatic || cfg.getBoolean("backupRaw", true);'
 assert 'data.put("armed",' in m and 'data.put("supportsInputTrigger", true)' in m
 assert 'data.put("autoStarted",' in m and 'data.put("triggerDb",' in m
 assert 'case "arm":' in m and 'sendRecorder("DISARM")' in m
-assert 'pendingArmPermission' in m and 'startRecording(pendingArmPermission);' in m
+# Both safe implementations are valid: passing the flag directly, or taking a
+# local snapshot before clearing it. The latter avoids carrying stale permission
+# state across a nested call. The Java smoke test checks the callback behavior.
+permission_callback = re.search(
+    r'@Override public void onRequestPermissionsResult\(int code, String\[\] permissions, int\[\] results\) \{.*?\n    \}',
+    m,
+    re.S,
+)
+assert permission_callback is not None, 'Missing microphone permission callback'
+callback = permission_callback.group(0)
+passes_flag_directly = 'startRecording(pendingArmPermission);' in callback
+snapshots_flag = bool(re.search(r'\bboolean\s+automatic\s*=\s*pendingArmPermission\s*;', callback)) \
+    and 'startRecording(automatic);' in callback
+assert passes_flag_directly or snapshots_flag, 'Permission result must preserve manual/auto start intent'
 assert 'if (automatic) config().edit().putBoolean("backupRaw", true).apply();' in m
 assert 'return recorder().getBoolean("running", false) || recorder().getBoolean("armed", false)' in m
 assert 'v.has("noticeColor")' in m and 'color.matches("#[0-9A-Fa-f]{6}")' in m
