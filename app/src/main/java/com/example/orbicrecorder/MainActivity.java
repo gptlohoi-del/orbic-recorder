@@ -813,10 +813,15 @@ public class MainActivity extends Activity {
     @Override public void onRequestPermissionsResult(int code, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(code, permissions, results);
         if (code == REQUEST_MIC) {
-            if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED)
-                startRecording(pendingArmPermission);
+            boolean automatic = pendingArmPermission;
             pendingArmPermission = false;
-            else toast("Cần cấp quyền micro để ghi âm");
+
+            if (results.length > 0 &&
+                    results[0] == PackageManager.PERMISSION_GRANTED) {
+                startRecording(automatic);
+            } else {
+                toast("Cần cấp quyền micro để ghi âm");
+            }
         }
     }
 
