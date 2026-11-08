@@ -26,7 +26,7 @@ jobs:
           test -f app/src/main/java/com/example/orbicrecorder/OtaManager.java
           test -f app/src/main/java/com/example/orbicrecorder/AudioDynamics.java
           test -f app/src/main/assets/ui/app.js
-          grep -q 'NATIVE_API = 11' app/src/main/java/com/example/orbicrecorder/OtaManager.java
+          grep -q 'NATIVE_API = 12' app/src/main/java/com/example/orbicrecorder/OtaManager.java
           node --check app/src/main/assets/ui/app.js
           python3 -m py_compile scripts/publish_ota.py
           python3 tests/test_project.py
@@ -38,11 +38,16 @@ jobs:
           python3 tests/test_user_preferences.py
           python3 tests/test_auto_ota.py
           python3 tests/test_auto_start_and_notice.py
+          python3 tests/test_manual_start_binding.py
       - name: Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+      - name: Check Java audio algorithms and permission callback
+        run: |
+          python3 tests/test_permission_callback.py
+          python3 tests/test_silence_compactor.py
       - name: Check Android 9 compatibility of source
         run: python3 tests/test_android9_compat.py
       - name: Test limiter processing (pure Java)
@@ -72,11 +77,11 @@ jobs:
           set -euo pipefail
           test -s app/build/outputs/apk/debug/app-debug.apk
           mkdir -p dist
-          cp app/build/outputs/apk/debug/app-debug.apk dist/ORBIC-RECORDER-v9.5.5-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk dist/ORBIC-RECORDER-v9.5.6-debug.apk
       - name: Upload APK to Actions artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ORBIC-RECORDER-v9.5.5-debug
-          path: dist/ORBIC-RECORDER-v9.5.5-debug.apk
+          name: ORBIC-RECORDER-v9.5.6-debug
+          path: dist/ORBIC-RECORDER-v9.5.6-debug.apk
           retention-days: 30
           if-no-files-found: error

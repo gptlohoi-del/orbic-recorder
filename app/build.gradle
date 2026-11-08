@@ -12,7 +12,7 @@ def releaseSigningReady = [releaseStorePath, releaseStorePassword, releaseKeyAli
         .every { it != null && !it.isEmpty() }
 
 // GitHub Actions increases the native version automatically. Local builds keep
-// the v9.5.5 native version number. Android debug builds need no release key.
+// the v9.5.6 native version number. Android debug builds need no release key.
 // This does not change the Android applicationId, certificate, or OTA protocol.
 def githubRunNumberText = System.getenv('GITHUB_RUN_NUMBER') ?: ''
 def githubRunNumber = githubRunNumberText ==~ /[0-9]+/ ? githubRunNumberText.toInteger() : 0
@@ -35,8 +35,8 @@ android {
         // GitHub run numbers are monotonic within the same workflow.
         // Android 9 is API 28; do not require Android 10 (minSdk 29).
         // New 200000+ range upgrades over v9.5.4 (190000+); preserves app data.
-        versionCode (200000 + githubRunNumber)
-        versionName (githubRunNumber > 0 ? "9.5.5.${githubRunNumber}" : '9.5.5')
+        versionCode (210000 + githubRunNumber)
+        versionName (githubRunNumber > 0 ? "9.5.6.${githubRunNumber}" : '9.5.6')
     }
 
     signingConfigs {

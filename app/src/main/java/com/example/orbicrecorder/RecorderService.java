@@ -21,10 +21,10 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Continuous 16-kHz PCM recorder. Every frame is written into the WAV timeline.
- * Optional RAW backup stores samples before the software limiter.
- * Optional one-shot input trigger: hold a short pre-roll while armed, then save
- * all frames continuously until explicit SAVE or DISCARD. No silence cutting.
+ * 16-kHz PCM recorder with SAFE and ECONOMY capture policies.
+ * Safe mode stores every frame. Economy mode keeps all shorter quiet spans and
+ * compacts spans that exceed the configured duration. Both write one WAV only.
+ * The one-shot input trigger runs before either mode starts its capture.
  */
 public class RecorderService extends Service {
     private static final String CHANNEL = "orbic_recording_v4";
@@ -40,6 +40,7 @@ public class RecorderService extends Service {
     private volatile boolean stopping;
     private volatile boolean discardRequested;
     private AudioRecord audio;
+    private int initialDeviceId = -1;
     private AutomaticGainControl hardwareAgc;
     private boolean hardwareAgcSetting;
     private String hardwareAgcStatus = "Chưa kiểm tra";
@@ -65,11 +66,14 @@ public class RecorderService extends Service {
 
     private Notification notification() {
         int flags = PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT;
+        String warning = state().getString("micWarning", "");
+        if (warning.isEmpty()) warning = state().getString("storageWarning", "");
         return new Notification.Builder(this, CHANNEL)
                 .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-                .setContentTitle("Orbic Recorder – Ghi âm liên tục")
-                .setContentText(stopping ? "Đang hoàn thiện WAV" : armed ? "Đang chờ tín hiệu từ micro – chạm ứng dụng để hủy chờ"
-                        : "Đang ghi liên tục – mở ứng dụng để LƯU / KHÔNG LƯU")
+                .setContentTitle("Orbic Recorder – Ghi âm")
+                .setContentText(stopping ? "Đang hoàn thiện WAV" : !warning.isEmpty() ? warning
+                        : armed ? "Đang chờ tín hiệu từ micro – chạm ứng dụng để hủy chờ"
+                        : "Đang ghi – mở ứng dụng, vuốt sang phải để LƯU")
                 .setOnlyAlertOnce(true)
                 .setContentIntent(PendingIntent.getActivity(this, 0,
                         new Intent(this, MainActivity.class), flags))
@@ -93,24 +97,8 @@ public class RecorderService extends Service {
             case "DISARM":
                 if (armed && !recording && !stopping) armed = false;
                 break;
-            case "STOP_DISCARD":
-                if (recording && !stopping) {
-                    String session = state().getString("activeSession", "");
-                    try {
-                        // Write tombstone before stopping, so crash recovery will not republish.
-                        RecordingArchive.markDiscard(this, session);
-                        discardRequested = true;
-                        stopping = true;
-                        recording = false;
-                        state().edit().putBoolean("saving", true)
-                                .putString("capture", "ĐANG HỦY VÀ XÓA WAV PHIÊN NÀY").apply();
-                        notifyChanged();
-                    } catch (IOException error) {
-                        stateValue("error", "Không thể đánh dấu hủy an toàn: " + error.getMessage()
-                                + ". Vẫn đang ghi; hãy dùng DỪNG & LƯU.");
-                    }
-                }
-                break;
+            // Destructive legacy command intentionally not supported by the new UI.
+            case "STOP_DISCARD": break;
             case "STOP":
                 if (recording) {
                     stopping = true;
@@ -120,8 +108,8 @@ public class RecorderService extends Service {
                     notifyChanged();
                 } else if (!stopping && !armed) stopSelf();
                 break;
-            // Ignore legacy notification and old OTA commands. Only STOP or
-            // STOP_DISCARD can finish; there is no pausing the recording.
+            // Ignore legacy notification and old OTA commands. Only SAVE/STOP
+            // can finish; there is no pausing the recording.
             default: break;
         }
         return START_NOT_STICKY;
@@ -145,10 +133,12 @@ public class RecorderService extends Service {
             stopping = false;
             discardRequested = false;
             AudioDeviceInfo device = audio == null ? null : audio.getRoutedDevice();
+            initialDeviceId = device == null ? -1 : device.getId();
             state().edit().putBoolean("running", !automatic).putBoolean("armed", automatic)
                     .putBoolean("autoStarted", false).putBoolean("saving", false)
                     .putBoolean("paused", false).putBoolean("musicSuspended", false)
                     .putBoolean("overload", false).putString("agcStatus", hardwareAgcStatus)
+                    .putString("micWarning", "").putString("storageWarning", "")
                     .putBoolean("starting", false).putString("error", "")
                     .putString("capture", automatic ? "◉ ĐANG CHỜ TÍN HIỆU ĐẦU VÀO" : "● ĐANG GHI LIÊN TỤC")
                     .putString("activeSession", automatic ? "" : session)
@@ -252,13 +242,64 @@ public class RecorderService extends Service {
         return Math.sqrt((double) power / (bytes.length / 2));
     }
 
+    /** Each WAV write/rewind keeps the durable header accounting consistent. */
+    private static SilenceCompactor.Sink wavSink(final RecordingArchive.Segment segment) {
+        return new SilenceCompactor.Sink() {
+            @Override public void append(byte[] pcm) throws IOException {
+                segment.voice.write(pcm);
+                segment.voiceBytes += pcm.length;
+            }
+            @Override public void truncateTail(long bytes) throws IOException {
+                if (bytes < 0 || bytes > segment.voiceBytes)
+                    throw new IOException("Invalid silence trim length");
+                long remaining = segment.voiceBytes - bytes;
+                segment.voice.setLength(44 + remaining);
+                segment.voice.seek(44 + remaining);
+                segment.voiceBytes = remaining;
+            }
+        };
+    }
+
+    private void checkCaptureWarnings(AudioRecord source, long elapsedFrames) {
+        if (elapsedFrames % 250 != 0) return; // every five seconds
+        try {
+            AudioDeviceInfo routed = source.getRoutedDevice();
+            if (initialDeviceId != -1 && (routed == null || routed.getId() != initialDeviceId)
+                    && state().getString("micWarning", "").isEmpty()) {
+                stateValue("micWarning", "⚠ Nguồn micro đã đổi hoặc ngắt kết nối! Kiểm tra dây PHONES.");
+                notifyChanged();
+            }
+        } catch (RuntimeException ignored) { /* Device routing not available. */ }
+        try {
+            long free = RecordingArchive.folder(this).getUsableSpace();
+            String warning = free < 128L * 1024 * 1024
+                    ? "⚠ Dung lượng ghi còn " + (free / (1024 * 1024)) + " MB; nên LƯU sớm."
+                    : "";
+            String previous = state().getString("storageWarning", "");
+            if (!warning.equals(previous)) {
+                stateValue("storageWarning", warning);
+                notifyChanged();
+            }
+        } catch (IOException error) {
+            stateValue("storageWarning", "⚠ Không kiểm tra được dung lượng lưu trữ.");
+        }
+    }
+
     private void captureLoop(String session, boolean automatic,
                              String priorUri, String priorFile, String priorRaw) {
         SharedPreferences cfg = config();
         int splitMinutes = cfg.getInt("splitMinutes", 60);
         if (splitMinutes < 1 || splitMinutes > 60) splitMinutes = 60;
         long splitFrames = (long) splitMinutes * 60 * 1000 / FRAME_MS;
-        final boolean saveRaw = automatic || cfg.getBoolean("backupRaw", true);
+        // Both tabs deliberately create one WAV. Mode is snapshotted for the session.
+        final boolean economy = automatic;
+        final boolean saveRaw = false;
+        int selectedSeconds = cfg.getInt("silenceSeconds", 60);
+        final int silenceSeconds = selectedSeconds >= 20 && selectedSeconds <= 1000
+                && (selectedSeconds - 20) % 10 == 0 ? selectedSeconds : 60;
+        final int silenceDb = Math.max(-60, Math.min(-15, cfg.getInt("triggerDb", -40)));
+        final SilenceCompactor compactor = economy
+                ? new SilenceCompactor(silenceSeconds, FRAME_MS, 2) : null;
         AudioDynamics dynamics = new AudioDynamics();
         boolean limiter = cfg.getBoolean("limiterEnabled", true);
         boolean overloadWarn = cfg.getBoolean("overloadWarn", true);
@@ -291,6 +332,7 @@ public class RecorderService extends Service {
                     if (!detected) {
                         // Update the UI 5 times/second, not every 20ms PCM frame.
                         if (++waitingFrames % 10 == 0) {
+                            checkCaptureWarnings(audio, waitingFrames);
                             double signalDb = signal.lastDb();
                             int meter = (int) Math.max(0, Math.min(100, (signalDb + 60) * 100 / 60));
                             state().edit().putInt("level", meter)
@@ -330,28 +372,20 @@ public class RecorderService extends Service {
                     notifyChanged();
                     // Every pre-roll frame, including the triggering frame, is written ONCE.
                     for (byte[] buffered : signal.drainPreRoll()) {
-                        if (current.raw != null) {
-                            current.raw.write(buffered);
-                            current.rawBytes += buffered.length;
-                        }
                         byte[] processed = Arrays.copyOf(buffered, buffered.length);
                         dynamics.processInPlace(processed);
-                        current.voice.write(processed);
-                        current.voiceBytes += processed.length;
-                        keptBytes += processed.length;
+                        long before = current.voiceBytes;
+                        compactor.accept(processed, 20 * Math.log10(Math.max(1.0e-9,
+                                rms(buffered) / 32768.0)) >= silenceDb, wavSink(current));
+                        keptBytes += current.voiceBytes - before;
                         elapsed++;
-                        partFrames++;
+                        partFrames = current.voiceBytes / FRAME_SIZE;
                     }
                     continue;
                 }
                 if (!recording) break;
                 elapsed++;
                 partFrames++;
-                // RAW receives every input sample before the software limiter.
-                if (current.raw != null) {
-                    current.raw.write(block);
-                    current.rawBytes += block.length;
-                }
                 double inputPeakDb = AudioDynamics.peakDbFs(block);
                 if (elapsed % 5 == 0) {
                     limiter = cfg.getBoolean("limiterEnabled", true);
@@ -367,11 +401,19 @@ public class RecorderService extends Service {
                 if (overloadWarn && inputPeakDb >= overloadThreshold)
                     warningUntilFrame = elapsed + 75;
                 dynamics.processInPlace(block);
-                // After one-shot activation, no threshold, silence trimming, PAUSE or music hold:
-                // one input frame always produces exactly one output frame.
-                current.voice.write(block);
-                current.voiceBytes += block.length;
-                keptBytes += block.length;
+                // Safe always writes everything; economy only shortens quiet spans
+                // reaching the selected duration. There is never a PAUSE.
+                long before = current.voiceBytes;
+                if (economy) {
+                    double dbRms = 20 * Math.log10(Math.max(1.0e-9, rms(frame) / 32768.0));
+                    compactor.accept(block, dbRms >= silenceDb, wavSink(current));
+                } else {
+                    current.voice.write(block);
+                    current.voiceBytes += block.length;
+                }
+                keptBytes += current.voiceBytes - before;
+                partFrames = current.voiceBytes / FRAME_SIZE;
+                checkCaptureWarnings(audio, elapsed);
                 if (elapsed % 5 == 0) {
                     double amp = rms(frame);
                     double db = 20 * Math.log10(Math.max(1.0e-9, amp / 32768.0));
@@ -385,11 +427,13 @@ public class RecorderService extends Service {
                             .putString("db", String.format(Locale.US, "%.1f", Math.max(-120.0, db)))
                             .putString("capture", overload
                                     ? "⚠ ĐẦU VÀO GẦN QUÁ TẢI – KIỂM TRA MICRO"
-                                    : "● ĐANG GHI LIÊN TỤC")
+                                    : economy ? "● TIẾT KIỆM – ĐANG GHI (cắt lặng ≥ " + silenceSeconds + "s)"
+                                    : "● AN TOÀN – ĐANG GHI LIÊN TỤC")
                             .putInt("part", part).apply();
                 }
                 if (elapsed % 250 == 0) RecordingArchive.sync(current);
-                if (partFrames >= splitFrames) {
+                // Never split a segment while a quiet run may still be rewound.
+                if (partFrames >= splitFrames && (!economy || !compactor.inQuietSpan())) {
                     RecordingArchive.close(current);
                     RecordingArchive.queueExport(this, current);
                     current = null;
@@ -411,6 +455,7 @@ public class RecorderService extends Service {
                 state().edit().putBoolean("running", false).putBoolean("armed", false)
                         .putBoolean("starting", false).putBoolean("saving", false)
                         .putBoolean("overload", false).putBoolean("autoStarted", false)
+                    .putString("micWarning", "").putString("storageWarning", "")
                         .putInt("level", 0).putString("activeSession", "")
                         .putString("db", "—").putString("capture", "ĐÃ HỦY CHỜ – CHƯA GHI FILE")
                         .apply();
@@ -418,6 +463,15 @@ public class RecorderService extends Service {
                 stopForeground(true);
                 stopSelf();
                 return;
+            }
+            if (current != null && compactor != null) {
+                try {
+                    long before = current.voiceBytes;
+                    compactor.flushTail(wavSink(current));
+                    keptBytes += current.voiceBytes - before;
+                } catch (IOException failure) {
+                    stateValue("error", "Không hoàn thiện đuôi khoảng lặng: " + failure.getMessage());
+                }
             }
             state().edit().putBoolean("running", false).putBoolean("armed", false)
                     .putBoolean("paused", false)
@@ -463,7 +517,8 @@ public class RecorderService extends Service {
                         + "ứng dụng sẽ thử xóa khi mở lại. Kiểm tra thư mục WAV.");
                 else finished.putString("error", "");
             }
-            finished.remove("priorUri").remove("priorFile").remove("priorLastRaw").apply();
+            finished.remove("priorUri").remove("priorFile").remove("priorLastRaw")
+                    .putString("micWarning", "").putString("storageWarning", "").apply();
             PROCESS_CAPTURING.set(false);
             stopForeground(true);
             stopSelf();

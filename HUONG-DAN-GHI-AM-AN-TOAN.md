@@ -1,18 +1,21 @@
-# HƯỚNG DẪN GHI ÂM AN TOÀN — v9.5.5
+# Sử dụng Orbic Recorder v9.5.6
 
-1. Cài đè APK mới với cùng khóa ký bản cũ; không gỡ bản đang cài nếu chưa sao lưu.
-2. Cài đặt → GHI ÂM: bật **Lưu thêm WAV gốc**. Chọn thư mục WAV còn nhiều dung lượng; kiểm tra micro đang sử dụng.
-3. Dừng nhạc hoàn toàn, nhấn **● START**. Giọng nói dù dưới mức nhỏ vẫn được giữ lại trong trục thời gian, nếu micro thu được.
-4. Trong lúc ghi, không có PAUSE và không thể phát nhạc bằng ứng dụng. Khi cần lưu, bấm **DỪNG & LƯU** rồi **vuốt sang phải** hết thanh.
-5. Nếu thật sự muốn loại bỏ toàn bộ dữ liệu phiên đang thu, bấm **DỪNG & KHÔNG LƯU** rồi **vuốt sang phải**. Các đoạn trước của phiên đó cũng sẽ bị xóa.
-6. Sau khi lưu, kiểm tra `_voice.wav` và `_raw.wav` nếu bật sao lưu, nghe lại đầu/giữa/cuối và so thời lượng với video.
+1. Mở ứng dụng, vào vùng GHI ÂM; tab **AN TOÀN** được chọn khi cài hoặc nâng cấp lần đầu.
+2. Với bản ghi quan trọng: bấm START. Ứng dụng tiếp tục ghi cả khi người nói nghỉ,
+   đến khi bạn bấm SAVE và **vuốt từ trái qua phải** để xác nhận.
+3. Nếu muốn tiết kiệm thời lượng WAV, chọn tab **TIẾT KIỆM** khi chưa bắt đầu.
+   Bấm BẮT ĐẦU GHI KHI CÓ TÍN HIỆU; nút xanh khi đang chờ.
+   Ở trạng thái chờ, bấm lại để hủy. Khi có tín hiệu đủ mạnh, tự bắt đầu ghi.
+4. Trong TIẾT KIỆM, mở Cài đặt → GHI ÂM để thay thời gian khoảng lặng:
+   mặc định 60 giây, 20 đến 1000 giây, mỗi bước 10 giây. Khi khoảng lặng đạt
+   ngưỡng, chỉ giữ khoảng 2 giây ở hai đầu; khoảng lặng ngắn hơn được giữ đủ.
+5. Cả hai tab đều **không có PAUSE** và chỉ có SAVE với thanh xác nhận vuốt phải.
+   Tab bị khóa trong khi đang ghi/chờ/lưu. Tab cuối sẽ được nhớ cho lần mở sau.
+6. Khi có cảnh báo đổi nguồn micro hoặc bộ nhớ sắp đầy, kiểm tra ngay dây và dung
+   lượng. Ứng dụng không tự sửa được tín hiệu từ mixer không truyền tới điện thoại.
+7. Từ bản v9.5.6, mỗi phiên ghi tạo **một WAV**, không có WAV RAW dự phòng.
+   Nếu cần ghép vào video liên tục hay không được mất lời nói, ưu tiên tab AN TOÀN.
 
-Đề nghị thử nghiệm: thu 30 giây, xen kẽ nói nhỏ và im lặng; kiểm tra WAV đủ 30 giây. Mở hộp Lưu rồi chạm/vuốt chưa hết phải **không dừng**. Thử tương tự với Không lưu; thử vuốt hết 2 chiều để xác nhận chỉ **trái → phải** có hiệu lực. Kiểm tra thông báo không còn nút dừng một chạm. Thử phát nhạc trong lúc ghi và START khi nhạc đang phát — cả hai phải từ chối. Thử nguồn micro bị rút và bộ nhớ gần đầy trên máy thật.
-
-**Lưu ý:** Các thử nghiệm mã nguồn chỉ phát hiện hồi quy tĩnh/JavaScript, không thay thế biên dịch Android và thử trực tiếp trên máy.
-
-
-### Chế độ tự kích hoạt một lần (v9.5.5)
-Bấm nút xám **BẮT ĐẦU GHI KHI CÓ TÍN HIỆU**, nút chuyển xanh trong lúc chờ. Micro nghe nền nhưng **chưa tạo file WAV**. Sau ~100ms mức âm cao hơn cấu hình, lưu lại ~1 giây trước lúc kích hoạt và tiếp tục ghi liên tục cho đến khi người dùng vuốt từ trái sang phải để Lưu hoặc Không lưu. Chạm lại khi đang chờ để hủy. Không tắt micro/giảm âm xuống dưới ngưỡng sau khi bắt đầu.
-
-Trước khi quay quan trọng, thử vặn PHONES từ MIN lên mức dự định với micro cắm đúng CTIA/adapter. MIN không phải luôn bằng 0; bộ khuếch đại/AGC có thể làm ứng dụng kích hoạt nhầm. Dùng mức âm ổn định, theo dõi dBFS, tránh gần 0 dBFS.
+Để ghi qua PHONES, thử mức nhỏ rồi tăng từ từ, dùng phụ kiện đúng chuẩn để tránh
+quá mức đầu vào micro điện thoại. Không nhầm PAUSE ở trình phát nhạc/nghe lại
+với PAUSE ghi âm (không tồn tại ở cả hai tab).

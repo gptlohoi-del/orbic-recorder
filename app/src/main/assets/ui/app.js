@@ -20,7 +20,8 @@
     {key:'uiFont',label:'Tỷ lệ kích thước chữ toàn giao diện',unit:'%',default:100,min:75,max:160,step:5,group:'view'},
     {key:'noticeFont',label:'Kích thước chữ vùng THÔNG BÁO',unit:'%',default:100,min:75,max:200,step:5,group:'notice'},
     {key:'noticeWeight',label:'Độ đậm chữ vùng THÔNG BÁO',unit:'',default:900,min:400,max:900,step:100,group:'notice'},
-    {key:'triggerDb',label:'Mức tín hiệu để TỰ BẮT ĐẦU GHI',unit:'dBFS',default:-40,min:-60,max:-15,step:1,group:'record'},
+    {key:'triggerDb',label:'Ngưỡng tín hiệu (bắt đầu / nhận diện lặng trong TIẾT KIỆM)',unit:'dBFS',default:-40,min:-60,max:-15,step:1,group:'record'},
+    {key:'silenceSeconds',label:'Chỉ cắt khi khoảng lặng dài tối thiểu',unit:'giây',default:60,min:20,max:1000,step:10,hardMin:20,hardMax:1000,group:'record'},
     {key:'uiOpacity',label:'Độ đậm nền các khung',unit:'%',default:100,min:30,max:100,step:5,group:'view'},
     {key:'waveHeight',label:'Độ cao vùng sóng âm',unit:'px',default:92,min:45,max:135,step:5,hardMin:30,hardMax:180,group:'view'}
   ];
@@ -142,6 +143,7 @@
     function commit(value){
       const bound=rule(spec); if (!Number.isFinite(value)) return updateViews();
       value=cap(Math.round(value),bound.min,bound.max);
+      if(spec.key==='silenceSeconds')value=cap(20+10*Math.round((value-20)/10),20,1000);
       // Native validates against hard safety bounds independently of UI.
       data[spec.key]=value; save({[spec.key]:value}); updateViews(); applyTheme();
     }
@@ -156,7 +158,7 @@
   specs.forEach(presentNumber);
   function renderAdvanced() {
     const wrap=$('advancedNumbers'); while(wrap.firstChild)wrap.removeChild(wrap.firstChild);
-    for(const spec of specs){
+    for(const spec of specs.filter(s=>s.key!=='silenceSeconds')){
       const r=rule(spec), item=document.createElement('div');item.className='advanced-item';
       const name=document.createElement('strong'); name.textContent=spec.label; item.append(name);
       const fields={};
@@ -214,8 +216,6 @@
     setText('autoRotateHelp',supportsAutoRotate
       ? 'Mặc định TẮT. Bật để xoay theo cảm biến điện thoại; khi tắt ứng dụng khóa màn hình theo chiều dọc. Hai nút XOAY 90° / 180° luôn hoạt động độc lập.'
       : 'Cần cài APK mới để thay đổi tự xoay theo cảm biến. Chỉ cập nhật OTA giao diện là chưa đủ.');
-    $('backupRaw').checked=current.backupRaw!==false;
-    $('backupRaw').disabled=!!current.running||!!current.starting||!!current.saving;
     document.querySelectorAll('#recordNumbers input, #recordNumbers button').forEach(el=>
       el.disabled=!!current.running||!!current.armed||!!current.starting||!!current.saving);
     for(const key of ['agcEnabled','limiterEnabled','overloadWarn']) $(key).checked=current[key]!==false;
@@ -238,22 +238,35 @@
     data.noticeColor=$('noticeColor').value;
     save({noticeColor:data.noticeColor});applyTheme();
   };
+  // Bind manual START to native recording. Keep this independent of auto-trigger.
   $('start').onclick=()=>{
-    if (!current || current.running || current.armed ||
-        current.starting || current.saving || current.recovering) {
-      return;
-    }
+    if(!current || current.running || current.armed || current.starting ||
+        current.saving || current.recovering)return;
     send('start');
   };
   $('autoStart').onclick=()=>{
-    if(!current || !current.supportsInputTrigger || current.running || current.saving ||
-        current.starting || current.recovering)return;
+    if(!current || current.recordMode!=='economy' || !current.supportsInputTrigger ||
+        current.running || current.saving || current.starting || current.recovering)return;
     send('arm');
   };
-  $('backupRaw').onchange=()=>{
-    if(current&&(current.running||current.armed)){$('backupRaw').checked=current.backupRaw!==false;return;}
-    save({backupRaw:$('backupRaw').checked});
-  };
+  for(const [id,mode] of [['tabSafe','safe'],['tabEconomy','economy']]){
+    $(id).onclick=()=>{
+      if(!current || current.running || current.armed || current.starting ||
+          current.saving || current.recovering)return;
+      current.recordMode=mode;save({recordMode:mode});renderRecordTabs(current);
+    };
+  }
+  function renderRecordTabs(d){
+    const economy=d.recordMode==='economy';
+    const locked=!!d.running||!!d.armed||!!d.starting||!!d.saving||!!d.recovering;
+    $('tabSafe').classList.toggle('selected',!economy);
+    $('tabEconomy').classList.toggle('selected',economy);
+    $('tabSafe').setAttribute('aria-selected',String(!economy));
+    $('tabEconomy').setAttribute('aria-selected',String(economy));
+    $('tabSafe').disabled=$('tabEconomy').disabled=locked;
+    $('safeActions').hidden=economy;
+    $('economyActions').hidden=!economy;
+  }
   $('autoRotateEnabled').onchange=()=>{
     if(!current || typeof current.autoRotateEnabled!=='boolean')return;
     current.autoRotateEnabled=$('autoRotateEnabled').checked;
@@ -307,11 +320,9 @@
           'Bài đang phát sẽ giảm dần âm lượng rồi mới chuyển bài. Bản ghi vẫn được giữ an toàn.',id);
       } else send(id);
     };
-  // Both final actions require a deliberate, full-length swipe to the RIGHT.
-  // The native bridge exposes finishRecording only in the new APK; old tap-based
-  // stop/discard actions have been removed from native dispatch.
-  function setupFinishSwipe(kind){
-    const modal=$(kind+'Modal'), track=$(kind+'Track'), thumb=$(kind+'Thumb'), fill=$(kind+'Fill');
+  // SAVE needs a deliberate right swipe; no destructive DISCARD or recording PAUSE.
+  function setupSaveSwipe(){
+    const modal=$('saveModal'), track=$('saveTrack'), thumb=$('saveThumb'), fill=$('saveFill');
     let pointer=null, originX=0, distance=0, since=0;
     function reset(){
       pointer=null;distance=0;
@@ -319,14 +330,11 @@
       track.classList.remove('dragging');
     }
     function close(){modal.hidden=true;reset();}
-    $(kind==='save'?'stop':'discard').onclick=()=>{
-      if(!current||!current.running||current.saving||current.starting||finishPending||
-         (kind==='discard'&&!isDiscardSupported(current)))return;
-      if(!$('saveModal').hidden||!$('discardModal').hidden)return;
+    $('stop').onclick=()=>{
+      if(!current||!current.running||current.saving||current.starting||finishPending)return;
       reset();modal.hidden=false;
     };
-    $(kind==='save'?'cancelSave':'cancelDiscard').onclick=close;
-    $(kind+'Backdrop').onclick=close;
+    $('cancelSave').onclick=$('saveBackdrop').onclick=close;
     const limit=()=>Math.max(0,track.clientWidth-thumb.offsetWidth-8);
     thumb.addEventListener('pointerdown',e=>{
       if(pointer!==null||modal.hidden||e.pointerType==='mouse'&&e.button!==0)return;
@@ -335,8 +343,6 @@
     });
     thumb.addEventListener('pointermove',e=>{
       if(e.pointerId!==pointer)return;
-      // Native rotation already maps pointer coordinates. Old CSS 180 fallback
-      // needs the sign inverted to preserve visible rightward motion.
       const direction=document.body.classList.contains('software-rotated-180')?-1:1;
       distance=cap((e.clientX-originX)*direction,0,limit());
       thumb.style.transform='translateX('+distance+'px)';
@@ -346,25 +352,20 @@
       if(e.pointerId!==pointer)return;
       const completed=limit()>0&&distance>=limit()*.92&&Date.now()-since>=180;
       reset();
-      if(completed&&current&&current.running&&!current.saving&&!current.starting&&
-          !finishPending&&(kind!=='discard'||isDiscardSupported(current))){
+      if(completed&&current&&current.running&&!current.saving&&!current.starting&&!finishPending){
         close();finishPending=true;finishRequestedAt=Date.now();
         try{if(window.Orbic&&typeof window.Orbic.finishRecording==='function')
-          window.Orbic.finishRecording(kind);
-          else {finishPending=false;setText('error','Cần cài APK v9.5.5 để xác nhận vuốt an toàn');$('error').hidden=false;}
+          window.Orbic.finishRecording('save');
+          else {finishPending=false;setText('error','Cần cài APK v9.5.6 để lưu bằng vuốt');$('error').hidden=false;}
         }catch(e){finishPending=false;console.error(e);}
       }
     });
     thumb.addEventListener('pointercancel',reset);
     return close;
   }
-  const closeSave=setupFinishSwipe('save');
-  const closeDiscard=setupFinishSwipe('discard');
+  const closeSave=setupSaveSwipe();
   function isThirdTrackSupported(d){
     return !!d && (d.supportsThirdTrack===true || /^ORBIC RECORDER v9\.4\.2(?:$|\.)/.test(d.nativeLabel||''));
-  }
-  function isDiscardSupported(d){
-    return !!d && (d.supportsSwipeDiscard===true || /^ORBIC RECORDER v9\.4\.2(?:$|\.)/.test(d.nativeLabel||''));
   }
   function confirmAction(title,message,action){
     setText('confirmTitle',title);setText('confirmText',message);pendingConfirm=action;$('confirm').hidden=false;
@@ -448,7 +449,7 @@
         details.onclick=play.onclick;
         const name=document.createElement('strong');name.textContent=(index+1)+'. '+item.name;
         const meta=document.createElement('small');
-        meta.textContent=dateLabel(item.modified)+' · '+(item.raw?'WAV gốc':'WAV đã lọc')+
+        meta.textContent=dateLabel(item.modified)+' · '+(item.raw?'WAV gốc cũ':'WAV ghi âm')+
           (fileSizeLabel(item.size)?' · '+fileSizeLabel(item.size):'');
         details.append(name,meta);row.append(play,details);
         list.append(row);recordingRows.push(row);
@@ -529,22 +530,18 @@
       const playing=d.musicStatus!=='idle', changing=!!d.pendingMusic||!!d.pendingResume;
       if(finishPending && (!d.running || d.saving || d.error ||
           Date.now()-finishRequestedAt>8000))finishPending=false;
-      if(!settingsOpened){
-        $('backupRaw').checked=d.backupRaw!==false;
-        $('backupRaw').disabled=!!d.running||!!d.armed||!!d.saving||!!d.starting;
-      }
       const fading=d.musicStatus==='fadingPause'||d.musicStatus==='fadingStop';
       const stopped=!d.running;
-      const hasSong3=isThirdTrackSupported(d),hasDiscard=isDiscardSupported(d);
+      const hasSong3=isThirdTrackSupported(d);
       const hasArchive=d.supportsRecordingLibrary===true;
-      setText('featureCompatibility',hasSong3&&hasDiscard&&hasArchive&&d.supportsInputTrigger===true
-        ? 'APK hỗ trợ tự kích hoạt một lần, ghi liên tục và xác nhận vuốt trái → phải.'
-        : 'Cần cài APK v9.5.5 để dùng TỰ KÍCH HOẠT. OTA giao diện không thêm được tính năng ghi âm native.');
+      setText('featureCompatibility',hasSong3&&hasArchive&&d.supportsRecordTabs===true
+        ? 'APK hỗ trợ hai chế độ ghi âm, cắt lặng dài và SAVE vuốt trái → phải.'
+        : 'Cần cài APK v9.5.6 để có đủ hai chế độ native. OTA giao diện không thay đổi thuật toán thu âm.');
+      renderRecordTabs(d);
       document.querySelectorAll('#recordNumbers input, #recordNumbers button').forEach(el=>
         el.disabled=!!d.running||!!d.armed||!!d.starting||!!d.saving);
       $('openRecordings').disabled=$('playNewest').disabled=!hasArchive;
       $('music3').textContent=hasSong3?'▶ BÀI 3':'BÀI 3 · APK MỚI';
-      $('discard').textContent=hasDiscard?'✕ DỪNG & KHÔNG LƯU':'✕ CẦN APK MỚI ĐỂ HỦY';
       // UI state is persisted by the native APK; older OTA-only APKs use the
       // button's own CSS fallback state and must not have it overwritten.
       const hasQuarterTurn=d.supportsRotation90===true && typeof d.uiRotationDegrees==='number';
@@ -577,16 +574,14 @@
       $('music3').classList.toggle('active-song',playing && d.activeSlot===3);
       // Điều khiển ghi âm độc lập với điều khiển nhạc.
       // Android sẽ giữ micro tắt trong suốt thời gian nhạc phát.
-      $('start').disabled=!!d.running||!!d.armed||!!d.saving||!!d.recovering||!!d.starting;
-      $('autoStart').disabled=!d.supportsInputTrigger||!!d.running||!!d.saving||!!d.recovering||!!d.starting;
+      $('start').disabled=d.recordMode!=='safe'||!!d.running||!!d.armed||!!d.saving||!!d.recovering||!!d.starting;
+      $('autoStart').disabled=d.recordMode!=='economy'||!d.supportsInputTrigger||!!d.running||!!d.saving||!!d.recovering||!!d.starting;
       $('autoStart').classList.toggle('active',!!d.armed||!!d.autoStarted&&!!d.running);
       $('autoStart').setAttribute('aria-pressed',d.armed||d.autoStarted&&d.running?'true':'false');
       $('autoStart').textContent=d.armed?'◉ ĐANG CHỜ TÍN HIỆU · CHẠM ĐỂ HỦY':
           d.running&&d.autoStarted?'● TỰ KÍCH HOẠT · ĐANG GHI':
           '◉ BẮT ĐẦU GHI KHI CÓ TÍN HIỆU';
-            $('stop').disabled=stopped||!!d.saving||!!d.starting||finishPending;
-      $('discard').disabled=!hasDiscard||stopped||!!d.saving||!!d.starting||finishPending;
-      if((stopped||d.saving)&&!$('discardModal').hidden)closeDiscard();
+      $('stop').disabled=stopped||!!d.saving||!!d.starting||finishPending;
       if((stopped||d.saving)&&!$('saveModal').hidden)closeSave();
       // Native APK v9.1+ provides a device-level AGC availability flag even before START.
       setText('agcSupport',typeof d.agcSupported==='boolean'
@@ -596,19 +591,21 @@
       setText('capture',d.capture||'Sẵn sàng');setText('recordState',d.running?'Đang ghi ●':d.armed?'Đang chờ ◉':'Sẵn sàng');
       setText('db',(d.db||'—')+' dBFS');
       setText('elapsed',fmt(d.elapsedMs));setText('kept',fmt(d.keptMs));setText('segments',d.segments||0);
-      setText('noticeMetrics','Đã thu '+fmt(d.elapsedMs)+' · '+(d.savedParts||0)+' file đã lưu');
+      setText('noticeMetrics','Đã thu '+fmt(d.elapsedMs)+(d.recordMode==='economy'?' · WAV '+fmt(d.keptMs):'')+' · '+(d.savedParts||0)+' file đã lưu');
       setText('file',d.file||'Chưa có bản ghi');setText('savedParts',(d.savedParts||0)+' đoạn đã lưu');
       if(d.file && d.file!==lastArchivedFile){
         // A freshly exported WAV becomes available after the native file field changes.
         if(lastArchivedFile && !$('recordingsModal').hidden)loadRecordingList(false);
         lastArchivedFile=d.file;
       }
+      const warnings=[d.micWarning,d.storageWarning].filter(Boolean);
+      setText('systemNote',warnings.join(' · '));$('systemNote').hidden=!warnings.length;
       setText('folderLabel',d.folder||'Music/OrbicRecorder');
       setText('settingsFolder',d.folder||'Music/OrbicRecorder');
       updateRecordingPlayer(d);
       setText('error',d.error||'');$('error').hidden=!d.error;
       if(d.error) setText('capture','⚠ '+d.error);
-      setText('otaVersion','Giao diện '+(d.otaVersion||'8.0.15'));setText('otaMessage',d.otaMessage||'Chưa kiểm tra');
+      setText('otaVersion','Giao diện '+(d.otaVersion||'8.0.16'));setText('otaMessage',d.otaMessage||'Chưa kiểm tra');
       if(!settingsOpened){
         const supportsAutoOta=typeof d.autoOtaEnabled==='boolean';
         $('autoOtaEnabled').disabled=!supportsAutoOta;

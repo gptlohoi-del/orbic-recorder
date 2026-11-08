@@ -35,7 +35,7 @@ import java.util.Collections;
 
 /** Native recorder from v4 + OTA-updateable local HTML/CSS/JS user interface. */
 public class MainActivity extends Activity {
-    private static final String NATIVE_LABEL = "ORBIC RECORDER v9.5.5 · TỰ KÍCH HOẠT";
+    private static final String NATIVE_LABEL = "ORBIC RECORDER v9.5.6 · AN TOÀN / TIẾT KIỆM";
     private static final String LOCAL_ORIGIN = "https://appassets.androidplatform.net";
     private static final int REQUEST_MIC = 101;
     private static final int REQUEST_FOLDER = 102;
@@ -81,14 +81,20 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // Migrate legacy VAD/video/pause settings; the new APK always records continuously.
+        // Migrate legacy VAD/video/pause settings to the new two-tab design.
         SharedPreferences prefs = config();
         if (!prefs.getBoolean("continuousModeMigrated", false)) {
             prefs.edit().remove("thresholdEnabled").remove("threshold")
                     .remove("minSpeech").remove("pre").remove("tail")
                     .remove("warnSeconds").remove("videoMode").remove("numericLimits")
-                    .putBoolean("backupRaw", true)
+                    .putBoolean("backupRaw", false)
                     .putBoolean("continuousModeMigrated", true).commit();
+        }
+        // Migrate existing v9.5.5 installations exactly once. Future tab choices persist.
+        if (!prefs.getBoolean("modeTabsMigrated", false)) {
+            prefs.edit().putString("recordMode", "safe")
+                    .putInt("silenceSeconds", 60).putBoolean("backupRaw", false)
+                    .putBoolean("modeTabsMigrated", true).commit();
         }
         // API capability can be checked before opening the microphone or requesting permission.
         // True means the Android AGC effect is exposed, not that every input path can use it.
@@ -228,6 +234,11 @@ public class MainActivity extends Activity {
     private void toast(String value) { Toast.makeText(this, value, Toast.LENGTH_LONG).show(); }
 
     private void startRecording(boolean automatic) {
+        String mode = config().getString("recordMode", "safe");
+        if (automatic != "economy".equals(mode)) {
+            toast("Chọn đúng tab ghi âm trước khi bắt đầu");
+            return;
+        }
         if (music.isActive() || music.isBlockingMic() || pendingMusic || pendingResume) {
             toast("Dừng hẳn nhạc trước khi START để tránh mất âm thanh");
             return;
@@ -246,8 +257,6 @@ public class MainActivity extends Activity {
             return;
         }
         if (captureActive() || recorder().getBoolean("starting", false)) return;
-        // Automatic recording always retains the unprocessed backup for video sync.
-        if (automatic) config().edit().putBoolean("backupRaw", true).apply();
         try {
             recorder().edit().putBoolean("starting", true).apply();
             // Never create a session without an actively recording microphone.
@@ -546,6 +555,10 @@ public class MainActivity extends Activity {
                 data.put("autoStarted", p.getBoolean("autoStarted", false));
                 data.put("supportsInputTrigger", true);
                 data.put("triggerDb", cfg.getInt("triggerDb", -40));
+                data.put("recordMode", cfg.getString("recordMode", "safe"));
+                data.put("silenceSeconds", cfg.getInt("silenceSeconds", 60));
+                data.put("micWarning", p.getString("micWarning", ""));
+                data.put("storageWarning", p.getString("storageWarning", ""));
                 data.put("musicSuspended", p.getBoolean("musicSuspended", false));
                 data.put("pendingMusic", pendingMusic);
                 data.put("pendingResume", pendingResume);
@@ -604,7 +617,7 @@ public class MainActivity extends Activity {
                 data.put("gearX", cfg.getInt("gearX", 99));
                 data.put("gearY", cfg.getInt("gearY", 0));
                 data.put("numericLimits", cfg.getString("numericLimits", "{}"));
-                data.put("backupRaw", cfg.getBoolean("backupRaw", true));
+                data.put("backupRaw", false);
                 data.put("splitMinutes", cfg.getInt("splitMinutes", 60));
                 data.put("theme", cfg.getString("theme", "system"));
                 data.put("autoOtaEnabled", ota.isAutoUpdateEnabled());
@@ -622,7 +635,8 @@ public class MainActivity extends Activity {
                 // Capability negotiation allows HTML OTA to avoid displaying
                 // destructive/native-only buttons on unsupported old APKs.
                 data.put("supportsThirdTrack", true);
-                data.put("supportsSwipeDiscard", true);
+                data.put("supportsSwipeDiscard", false);
+                data.put("supportsRecordTabs", true);
                 data.put("supportsRecordingLibrary", true);
                 data.put("activeRecordingId", activeRecordingId);
             } catch (Exception ignored) { }
@@ -711,14 +725,14 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void finishRecording(String choice) {
             // Called only after the UI's full right swipe; do not expose these
             // commands through generic action() or Android notifications.
-            if (!"save".equals(choice) && !"discard".equals(choice)) return;
+            if (!"save".equals(choice)) return;
             runOnUiThread(() -> {
                 if (!recorder().getBoolean("running", false) ||
                         recorder().getBoolean("saving", false) ||
                         recorder().getBoolean("starting", false)) return;
                 musicShouldReturnListening = false;
                 listeningRestoreTicket++;
-                sendRecorder("save".equals(choice) ? "STOP" : "STOP_DISCARD");
+                sendRecorder("STOP");
             });
         }
 
@@ -726,19 +740,21 @@ public class MainActivity extends Activity {
             if (json == null || json.length() > 12000) return;
             try {
                 JSONObject v = new JSONObject(json);
-                String[] numeric = { "fadeIn", "fadeOut", "pauseStopFade", "musicVolume", "listenDelay", "uiFont", "noticeFont", "noticeWeight", "uiOpacity", "waveHeight", "triggerDb",
+                String[] numeric = { "fadeIn", "fadeOut", "pauseStopFade", "musicVolume", "listenDelay", "uiFont", "noticeFont", "noticeWeight", "uiOpacity", "waveHeight", "triggerDb", "silenceSeconds",
                         "limitDb", "attackMs", "releaseMs", "overloadDb" };
-                int[] low = { 0, 0, 0, 0, 0, 75, 75, 400, 30, 30, -60, -30, 1, 20, -12 };
-                int[] high = { 30000, 30000, 15000, 100, 5000, 160, 200, 900, 100, 180, -15, -1, 250, 5000, -1 };
+                int[] low = { 0, 0, 0, 0, 0, 75, 75, 400, 30, 30, -60, 20, -30, 1, 20, -12 };
+                int[] high = { 30000, 30000, 15000, 100, 5000, 160, 200, 900, 100, 180, -15, 1000, -1, 250, 5000, -1 };
                 SharedPreferences.Editor edit = config().edit();
                 for (int i = 0; i < numeric.length; i++) {
                     if (v.has(numeric[i])) {
                         // Do not reconfigure the one-shot trigger during an armed/active session.
-                        if ("triggerDb".equals(numeric[i]) &&
+                        if (("triggerDb".equals(numeric[i]) || "silenceSeconds".equals(numeric[i])) &&
                                 (captureActive() || recorder().getBoolean("starting", false))) continue;
                         int number = v.getInt(numeric[i]);
                         if (number < low[i] || number > high[i])
                             throw new IllegalArgumentException("Vượt giới hạn an toàn: " + numeric[i]);
+                        if ("silenceSeconds".equals(numeric[i]) && (number - 20) % 10 != 0)
+                            throw new IllegalArgumentException("Khoảng lặng phải tăng theo 10 giây từ 20 giây");
                         edit.putInt(numeric[i], number);
                     }
                 }
@@ -778,9 +794,16 @@ public class MainActivity extends Activity {
                     edit.putBoolean("autoRotateEnabled", enabled);
                     runOnUiThread(() -> applyScreenOrientation(enabled));
                 }
-                if (v.has("backupRaw") && !captureActive() &&
-                        !recorder().getBoolean("starting", false))
-                    edit.putBoolean("backupRaw", v.getBoolean("backupRaw"));
+                // Safety/economy use one WAV each; old RAW preference is ignored.
+                edit.putBoolean("backupRaw", false);
+                if (v.has("recordMode")) {
+                    String mode = v.getString("recordMode");
+                    if (!("safe".equals(mode) || "economy".equals(mode)))
+                        throw new IllegalArgumentException("Chế độ ghi không hợp lệ");
+                    if (captureActive() || recorder().getBoolean("starting", false))
+                        throw new IllegalArgumentException("Không thể đổi tab trong khi ghi hoặc chờ tín hiệu");
+                    edit.putString("recordMode", mode);
+                }
                 if (v.has("autoOtaEnabled")) {
                     boolean enabled = v.getBoolean("autoOtaEnabled");
                     ota.setAutoUpdateEnabled(enabled);
@@ -803,7 +826,10 @@ public class MainActivity extends Activity {
                     }
                     edit.putString("numericLimits", limits.toString());
                 }
-                edit.apply();
+                // Persist a chosen recording tab synchronously so relaunch restores it.
+                if (v.has("recordMode")) {
+                    if (!edit.commit()) throw new IllegalStateException("Không lưu được tab đã chọn");
+                } else edit.apply();
             } catch (Exception e) {
                 runOnUiThread(() -> toast("Cài đặt không hợp lệ: " + e.getMessage()));
             }
@@ -813,11 +839,9 @@ public class MainActivity extends Activity {
     @Override public void onRequestPermissionsResult(int code, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(code, permissions, results);
         if (code == REQUEST_MIC) {
-            boolean automatic = pendingArmPermission;
+            final boolean automatic = pendingArmPermission;
             pendingArmPermission = false;
-
-            if (results.length > 0 &&
-                    results[0] == PackageManager.PERMISSION_GRANTED) {
+            if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
                 startRecording(automatic);
             } else {
                 toast("Cần cấp quyền micro để ghi âm");

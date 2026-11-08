@@ -1,43 +1,60 @@
-# ORBIC RECORDER v9.5.5 — Ghi âm liên tục, ưu tiên giữ WAV đầy đủ
+# Orbic Recorder v9.5.6 — AN TOÀN và TIẾT KIỆM
 
-Ứng dụng Android (Android 9 trở lên) ghi giọng nói thành WAV PCM 16 kHz, mono, 16-bit. Phiên ghi luôn lưu **mọi khung PCM thu được**, kể cả im lặng và nói nhỏ; không có lọc tiếng động, không có nút PAUSE ghi âm, không có chế độ VIDEO riêng.
+Android 9+ (minSdk 28), ứng dụng ghi WAV mono PCM 16 kHz / 16-bit và phát nhạc riêng.
+Giao diện HTML/CSS/JS chạy trong WebView; ghi âm, quản lý file và phát hiện tín hiệu
+được xử lý bằng Java Android. Không cần Internet để ghi âm.
 
-## Giao diện
+## Hai tab ghi âm
 
-- **● START** bắt đầu thu thực sự; nếu nhạc vẫn đang phát thì từ chối khởi động để tránh tạo lỗ hổng thời gian.
-- **■ DỪNG & LƯU** chỉ mở hộp xác nhận. Vuốt đầy đủ **từ trái sang phải** để lưu. Chạm ngắn hay vuốt chưa đủ không dừng ghi.
-- **✕ DỪNG & KHÔNG LƯU** cũng yêu cầu vuốt đầy đủ **từ trái sang phải**. Hành động này xóa toàn bộ WAV của phiên hiện tại, kể cả các đoạn đã lưu theo thời gian; không thể hoàn tác. Các phiên trước không bị ảnh hưởng.
-- Không có nút PAUSE cho ghi âm. Thông báo Android chỉ hiển thị trạng thái và mở ứng dụng; không có PAUSE hay STOP một chạm.
-- Nút PAUSE của **trình phát nhạc và nghe lại file** là chức năng riêng, không phải PAUSE ghi âm. Không thể phát nhạc khi đang ghi; phải dừng nhạc hoàn toàn trước START.
+**AN TOÀN** (mặc định lần đầu hoặc khi nâng cấp): chọn START để ghi tất cả các
+khung âm thanh nhận được, kể cả khoảng lặng. Không có nút PAUSE. Chọn SAVE,
+vuốt thanh xác nhận từ trái qua phải để dừng và lưu. Không có thao tác Không lưu.
 
-## File WAV
+**TIẾT KIỆM**: chọn BẮT ĐẦU GHI KHI CÓ TÍN HIỆU. App mở micro và chờ mức RMS
+vượt ngưỡng (mặc định -40 dBFS) liên tục khoảng 100 ms. App giữ tối đa
+1 giây âm thanh đã nhận trước lúc kích hoạt. Khi đang ghi, app giữ nguyên
+mọi khoảng lặng **ngắn hơn thời gian thiết lập**. Với một khoảng lặng đạt
+ngưỡng thời gian (mặc định 60 giây), app rút gọn phần giữa, chỉ giữ lại
+2 giây ở đầu và 2 giây cuối. Mọi tín hiệu được phân loại theo mức RMS, **không
+phải bộ nhận dạng tiếng người**: giọng nói quá nhỏ kéo dài có thể bị cắt.
 
-- `_voice.wav`: ghi liên tục, qua Limiter nếu có bật. Đây là bản ghi chính.
-- `_raw.wav`: ghi liên tục trước Limiter phần mềm. Mặc định bật khi cài APK v9.5.5 lần đầu / nâng cấp; có thể tắt khi dùng START thủ công. Chế độ tự kích hoạt luôn tự bật lại WAV gốc để an toàn, nên cần đủ dung lượng cho hai file.
-- File được chia theo khoảng thời gian cấu hình (mặc định 60 phút) để giảm rủi ro mất toàn bộ dữ liệu khi lỗi. Tiến trình cập nhật header WAV và đồng bộ dữ liệu định kỳ 5 giây.
-- Android 9 có thể dùng bộ nhớ ứng dụng; hãy **chọn thư mục SAF** để tránh mất file nếu gỡ cài đặt. Sao chép file quan trọng ra nơi khác.
+Có thể chỉnh thời gian lặng tại Cài đặt → GHI ÂM: 20–1000 giây, bước 10 giây.
+Có thể chỉnh ngưỡng tín hiệu -60 đến -15 dBFS. Hai thông số được khóa trong
+suốt thời gian đang chờ hoặc đang ghi. Tab đang dùng được lưu cho lần mở sau;
+không đổi tab khi đang ghi/chờ/lưu. START thủ công chỉ có ở tab AN TOÀN.
 
-## An toàn & lưu ý
+**Mỗi phiên chỉ tạo một WAV chính**, không tự lưu thêm `_raw.wav`. Những file
+`_raw.wav` của phiên bản cũ vẫn có thể xuất hiện trong thư viện; bản nâng cấp
+không xóa bản ghi cũ. WAV có thể được chia theo cấu hình 1–60 phút (thời
+điểm chia phần được hoãn nếu đang xét một khoảng lặng dài để tránh mất dữ liệu).
 
-- Vuốt bảo vệ khỏi thao tác chạm nhầm, **không** bảo vệ hoàn toàn trước mất điện, hỏng micro, hết bộ nhớ, ứng dụng bị hệ điều hành dừng, hoặc lỗi thiết bị.
-- Nếu thu cùng video ở thiết bị khác, vẫn cần đồng bộ điểm đầu (ví dụ một tiếng vỗ tay), kiểm tra độ trôi đồng hồ và tránh đổi nguồn micro.
-- Cân nhắc bật WAV gốc, bật cảnh báo đầu vào gần quá tải, thử thu trước sự kiện và kiểm tra dung lượng trống.
-- Tùy chọn AGC và Limiter hoạt động độc lập. WAV gốc không tránh được méo tiếng xảy ra ngay tại đầu vào.
+## Cảnh báo và an toàn
 
-## Cập nhật
+- Khi nguồn âm thanh đổi hoặc rút micro, ứng dụng hiển thị cảnh báo tại vùng
+  thông báo và trong thông báo Android, nhưng không tự ngắt phiên ghi.
+  Một số nguồn âm không cung cấp định danh thiết bị: cảnh báo không đảm bảo
+  phát hiện mọi trường hợp dây PHONES bị tuột.
+- Khi dung lượng khu vực ghi tạm còn dưới 128 MB, ứng dụng cảnh báo và khuyên
+  SAVE. Dữ liệu không thể được bảo đảm nếu bộ nhớ đầy hoặc Android đóng tiến trình.
+- Khi START/ARM, ứng dụng từ chối nếu trình phát nhạc đang hoạt động; khi đang
+  ghi thì không được mở phát nhạc để tránh nhả micro.
+- Trong TIẾT KIỆM, không có bản RAW để khôi phục phần bị cắt. Dùng AN TOÀN nếu
+  một câu nói bị mất là không thể chấp nhận.
+- Dùng cổng PHONES của mixer với bộ chuyển mức và chuyển chân phù hợp; mức
+  PHONES MIN không đảm bảo đầu vào điện thoại hoàn toàn bằng 0. Bản ghi không
+  thể khôi phục âm thanh khi mixer chưa đưa tín hiệu tới điện thoại.
 
-**Cần xây dựng và cài APK mới v9.5.5 một lần**, vì thuật toán ghi liên tục và việc chặn các lệnh cũ nằm trong Java Android. OTA chỉ thay đổi giao diện đã ký; dự án dùng native API `11` và giao diện tích hợp `8.0.15` để tránh áp dụng OTA cũ chứa các nút đã bị xóa. Để giữ dữ liệu, cài đè APK cùng application ID, cùng khóa ký và versionCode cao hơn, không gỡ APK cũ.
+## Build, kiểm thử và cập nhật
 
-Dùng `.github/workflows/build.yml` để build APK debug, hoặc `.github/workflows/build-release.yml` với các biến khóa ký được mô tả trong `RELEASE_SIGNING_GUIDE.md` để build bản Release cài đè. Chưa có APK được biên dịch trong gói mã nguồn này; cần thử trên thiết bị thật.
+- `minSdk 28`, `targetSdk 32`, `compileSdk 35` (Android 9 vẫn có thể cài).
+- `nativeApi=12`, giao diện tích hợp `8.0.16` để tránh OTA cũ đè giao diện
+  của bản mới. **Cần build/cài APK mới**, chỉ OTA không thể bổ sung thuật toán
+  cắt khoảng lặng native.
+- GitHub Actions: **Tạo APK Orbic Recorder**, hoặc bản Release có khóa ký.
+  Cài đè bằng APK cùng applicationId, cùng khóa ký và versionCode cao hơn;
+  không gỡ ứng dụng khi chưa sao lưu WAV.
+- Test: `python3 tests/test_silence_compactor.py`, sau đó chạy `tests/test_*.py`
+  hoặc để GitHub Actions chạy tự động. Các test mã nguồn không thay cho thử trên
+  thiết bị Android 9 thật.
 
-Xem [HUONG-DAN-GHI-AM-AN-TOAN.md](HUONG-DAN-GHI-AM-AN-TOAN.md) để kiểm tra trước khi ghi sự kiện quan trọng.
-
-
-## v9.5.5 – Tự bắt đầu khi có tín hiệu
-
-- Nút **BẮT ĐẦU GHI KHI CÓ TÍN HIỆU** trên màn hình chính: xám khi tắt, xanh khi chờ; chạm lại để hủy chờ.
-- Micro được mở trong trạng thái chờ, chỉ tạo phiên/file khi đầu vào đạt mức kích hoạt tối thiểu 100ms. Giữ đệm tiền ghi ~1 giây để tránh mất âm đầu.
-- Sau khi kích hoạt, ghi liên tục từng khung PCM vào WAV, **không ngắt vì im lặng**, không PAUSE; Lưu/Không lưu đều xác nhận vuốt **trái sang phải**.
-- Cài đặt → Ghi âm: chỉnh mức kích hoạt chỉ cho lúc chờ (mặc định -40 dBFS). Cài đặt → Vùng thông báo: chỉnh cỡ, màu và độ đậm chữ.
-- Vì thay đổi ghi âm Java/native, cần build **APK v9.5.5**, không thể dùng OTA để bổ sung chức năng này lên APK cũ. `nativeApi=11` để tránh OTA tương thích sai.
-- Chú ý mức PHONES=MIN không chắc chắn là số 0 tuyệt đối, AGC/tạp âm vẫn có thể kích hoạt nhầm; thử thực tế và sử dụng cáp suy giảm mức tín hiệu, CTIA/TRRS đúng chuẩn nếu cắm cổng headset điện thoại.
+Xem thêm `THAY-DOI-v9.5.6.md` và `HUONG-DAN-GHI-AM-AN-TOAN.md`.
