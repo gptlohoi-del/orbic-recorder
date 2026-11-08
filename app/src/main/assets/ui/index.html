@@ -2,7 +2,7 @@
 <html lang="vi"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="color-scheme" content="light dark">
-<title>ORBIC RECORDER – Nhạc & Ghi theo tiếng động</title>
+<title>ORBIC RECORDER – Nhạc & Ghi âm liên tục</title>
 <link rel="stylesheet" href="app.css">
 </head><body>
 <main id="app" class="app" aria-label="Phát nhạc và ghi âm – màn hình cố định">
@@ -29,25 +29,26 @@
       <button type="button" id="settingsToggle" class="floating-gear" title="Mở cài đặt" aria-label="Mở cài đặt">⚙</button>
     </section>
   </div>
-  <section class="record panel" aria-label="Ghi theo tiếng động">
+  <section class="record panel" aria-label="Ghi âm liên tục">
     <div class="heading record-heading">
-      <strong>🎙 GHI THEO TIẾNG ĐỘNG</strong>
+      <strong>🎙 GHI ÂM LIÊN TỤC</strong>
       <div class="record-quick-actions">
         <span id="recordState">Sẵn sàng</span>
         <button id="openRecordings" class="record-quick-button" type="button" aria-label="Mở thư mục bản ghi, mới nhất ở trên" title="📁 Danh sách bản ghi WAV (mới nhất trước)">📁</button>
         <button id="playNewest" class="record-quick-button" type="button" aria-label="Nghe bản ghi vừa lưu" title="▶ Nghe ngay bản ghi vừa lưu">▶</button>
       </div>
     </div>
-    <div class="wave-row"><div class="waveform" id="waveform" data-style="line" aria-label="Biểu đồ mức âm thanh và vạch ngưỡng phát hiện tiếng động">
+    <button id="autoStart" type="button" class="auto-start-toggle" aria-pressed="false" title="Chờ tín hiệu micro, sau đó ghi liên tục">
+      ◉ BẮT ĐẦU GHI KHI CÓ TÍN HIỆU
+    </button>
+    <div class="wave-row"><div class="waveform" id="waveform" data-style="line" aria-label="Biểu đồ mức âm thanh">
       <div class="wave-bars" id="waveBars" aria-hidden="true"></div>
       <svg class="wave-line-svg" id="waveLineSvg" aria-hidden="true" viewBox="0 0 300 100" preserveAspectRatio="none">
         <defs><linearGradient id="waveFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2cefc3" stop-opacity=".37"/><stop offset="100%" stop-color="#2cefc3" stop-opacity=".01"/></linearGradient></defs>
         <path id="waveArea" fill="url(#waveFill)"></path><path id="waveLine" fill="none" stroke="#3aebc1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
       </svg>
-      <div class="threshold-line" id="thresholdLine"><span>NGƯỠNG</span></div><div class="threshold-mirror-line" id="thresholdMirrorLine" aria-hidden="true"></div>
     </div><b id="db">— dBFS</b></div>
-    <div class="threshold-controls"><span>Ngưỡng âm thanh</span><div><button id="thresholdMinus" type="button" aria-label="Giảm ngưỡng phát hiện">−</button><strong id="thresholdValue">−38 dBFS</strong><button id="thresholdPlus" type="button" aria-label="Tăng ngưỡng phát hiện">+</button></div></div>
-    <div class="record-controls"><button id="start" class="btn green" type="button">● START</button><button id="pause" class="btn yellow" type="button" disabled>Ⅱ PAUSE</button><button id="stop" class="btn red" type="button" disabled>■ DỪNG &amp; LƯU</button></div>
+    <div class="record-controls"><button id="start" class="btn green" type="button">● START</button><button id="stop" class="btn red" type="button" disabled>■ DỪNG &amp; LƯU</button></div>
     <button id="discard" type="button" class="btn discard-button" disabled>✕ DỪNG &amp; KHÔNG LƯU</button>
   </section>
   <div class="error" id="error" hidden></div>
@@ -57,7 +58,7 @@
   <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialogTitle">
     <header class="dialog-header"><h2 id="dialogTitle">⚙ CÀI ĐẶT</h2><button class="btn outline" id="closeSettings" type="button">✕ THOÁT</button></header>
     <div class="dialog-scroll" id="settingsScroll">
-      <p class="hint">Mỗi thay đổi được tự lưu. Công tắc bật/tắt ngưỡng, ngưỡng phát hiện và thông số chống quá tải áp dụng trong khoảng 100 ms khi micro đang hoạt động; các thông số lọc khác áp dụng cho phiên ghi tiếp theo. DỪNG &amp; LƯU sẽ kết thúc phiên ghi, không dừng nhạc.</p>
+      <p class="hint">Mỗi thay đổi được tự lưu. Chỉ phát hiện tín hiệu một lần để tự bắt đầu; sau đó ghi âm luôn liên tục, không PAUSE hay cắt khoảng lặng. Để kết thúc, chọn LƯU hoặc KHÔNG LƯU rồi vuốt sang phải để xác nhận. Không thể phát nhạc trong khi đang ghi.</p>
       <details open><summary>🎨 GIAO DIỆN</summary>
         <p class="hint">Kiểu sóng âm (xem trước và chạm để chọn). Thay đổi tức thì, tự lưu; không thay đổi độ nhạy micro hay file WAV.</p>
         <div id="waveStylePicker" class="wave-style-picker" role="radiogroup" aria-label="Chọn kiểu sóng âm"></div>
@@ -65,22 +66,23 @@
         <p class="hint" id="autoRotateHelp">Mặc định TẮT: màn hình không tự xoay khi bạn nghiêng điện thoại. Nút XOAY 90° và XOAY 180° vẫn dùng bình thường.</p>
         <div id="viewNumbers" class="numeric-list"></div><label class="selectline">Chủ đề <select id="theme"><option value="system">Theo hệ thống</option><option value="light">Sáng</option><option value="dark">Tối</option></select></label></details>
       <details><summary>🔔 VÙNG THÔNG BÁO</summary>
-        <p class="hint">Điều chỉnh riêng kích thước chữ trong khung thông báo trên màn hình chính. Thay đổi tức thì và tự lưu.</p>
+        <p class="hint">Đổi màu, kích thước và độ đậm chữ trong vùng THÔNG BÁO. Xem ngay trên màn hình chính; tự lưu.</p>
+        <label class="selectline">Màu chữ <input id="noticeColor" type="color" value="#000000" aria-label="Chọn màu chữ thông báo"></label>
         <div id="noticeNumbers" class="numeric-list"></div>
       </details>
-      <details open><summary>♫ PHÁT NHẠC</summary><div id="musicNumbers" class="numeric-list"></div><p class="hint">PAUSE/STOP nhạc sẽ tiếp tục phát và giảm âm về 0 trong thời gian đã chọn (tối đa bằng phần nhạc còn lại). Khi nhạc phát micro tắt, nhưng các nút ghi âm vẫn dùng được. Nếu phiên ghi còn chạy, nhạc dừng sẽ trở lại nghe tiếng động.</p></details>
+      <details open><summary>♫ PHÁT NHẠC</summary><div id="musicNumbers" class="numeric-list"></div><p class="hint">PAUSE/STOP nhạc sẽ tiếp tục phát và giảm âm về 0 trong thời gian đã chọn (tối đa bằng phần nhạc còn lại). Không thể bắt đầu ghi khi nhạc đang phát, và không thể phát nhạc trong phiên ghi. Đây là biện pháp tránh đứt quãng WAV.</p></details>
       <details open><summary>🎙 GHI ÂM</summary>
-        <label class="checkline">Bật ngưỡng nhận diện âm thanh (lọc khoảng lặng) <input id="thresholdEnabled" type="checkbox"></label>
-        <p class="hint" id="thresholdSupport">Bỏ chọn để ghi liên tục, kể cả âm thanh nhỏ và khoảng lặng; vẫn dùng PAUSE/DỪNG và tắt micro khi phát nhạc. Có hiệu lực trong khoảng 100 ms.</p>
-        <div id="recNumbers" class="numeric-list"></div>
-        <label class="checkline">Lưu WAV gốc (kể cả khoảng lặng) <input id="backupRaw" type="checkbox"></label>
+        <label class="checkline">Lưu thêm WAV gốc (trước Limiter) <input id="backupRaw" type="checkbox" checked></label>
+        <p class="hint">Nên BẬT: WAV chính luôn ghi liên tục sau khi START hoặc sau lần kích hoạt tự động; WAV gốc giữ dữ liệu trước Limiter. Không cắt khoảng lặng sau khi bắt đầu.</p>
+        <p class="hint">TỰ KÍCH HOẠT: nút xám trên màn hình chính → chạm để chờ tín hiệu, nút xanh khi đang chờ. Giữ 1 giây tiền ghi; cần tín hiệu liên tục khoảng 0,1 giây để bắt đầu, sau đó chỉ vuốt LƯU / KHÔNG LƯU mới dừng. Khi chờ, bấm lại nút để hủy. Tự bật WAV gốc; mức kích hoạt chỉ đổi được trước khi bắt đầu chờ. PHONES ở MIN có thể vẫn có tiếng nền.</p>
+        <div id="recordNumbers" class="numeric-list"></div>
         <label class="selectline">Chia file mỗi <select id="splitMinutes"><option value="1">1 phút</option><option value="5">5 phút</option><option value="10">10 phút</option><option value="15">15 phút</option><option value="30">30 phút</option><option value="60" selected>60 phút</option></select></label>
       </details>
       <details open><summary>🛡 CHỐNG QUÁ TẢI ÂM THANH</summary>
         <label class="checkline">AGC tự động của Android (nếu thiết bị hỗ trợ) <input id="agcEnabled" type="checkbox"></label>
         <p class="hint">Hỗ trợ AGC trên điện thoại: <strong id="agcSupport">Đang kiểm tra...</strong></p>
         <p class="hint">Trạng thái khi thu: <strong id="agcStatus">Chưa khởi động micro</strong></p>
-        <label class="checkline">Bật Limiter cho WAV chính (lọc / ghi liên tục) <input id="limiterEnabled" type="checkbox"></label>
+        <label class="checkline">Bật Limiter cho WAV chính (ghi liên tục) <input id="limiterEnabled" type="checkbox"></label>
         <label class="checkline">Cảnh báo khi đầu vào gần quá tải <input id="overloadWarn" type="checkbox"></label>
         <div id="protectNumbers" class="numeric-list"></div>
         <p class="hint">Dòng hỗ trợ AGC kiểm tra API Android ngay cả khi chưa START; chỉ khi mở micro mới xác định AGC có bật được trên nguồn âm đang dùng hay không. Limiter chỉ giảm tín hiệu đã thu được, không thể sửa méo tiếng đã xảy ra ở micro hoặc mạch thu. WAV gốc dự phòng giữ dữ liệu trước Limiter phần mềm (có thể vẫn bị rè).</p>
@@ -90,7 +92,7 @@
       <details><summary>↻ CẬP NHẬT OTA</summary>
         <label class="checkline">TỰ ĐỘNG CẬP NHẬT OTA <input id="autoOtaEnabled" type="checkbox" checked></label>
         <p class="hint" id="autoOtaHelp">Mặc định BẬT. Tự kiểm tra khi mở ứng dụng; chỉ cài khi không ghi âm, lưu WAV hoặc phát nhạc.</p>
-        <p class="hint" id="otaMessage">Chưa kiểm tra</p><p class="hint" id="otaVersion">Giao diện 8.0.9</p><div class="settings-buttons"><button id="checkOta" class="btn outline" type="button">KIỂM TRA</button><button id="installOta" class="btn blue" disabled type="button">CẬP NHẬT</button><button id="rollback" class="btn outline" hidden type="button">QUAY LẠI</button></div><p class="hint" id="featureCompatibility">Đang kiểm tra các tính năng của APK...</p><p class="hint">OTA chỉ cập nhật HTML/CSS/JS có chữ ký. Chức năng Android native yêu cầu APK mới.</p></details>
+        <p class="hint" id="otaMessage">Chưa kiểm tra</p><p class="hint" id="otaVersion">Giao diện 8.0.15</p><div class="settings-buttons"><button id="checkOta" class="btn outline" type="button">KIỂM TRA</button><button id="installOta" class="btn blue" disabled type="button">CẬP NHẬT</button><button id="rollback" class="btn outline" hidden type="button">QUAY LẠI</button></div><p class="hint" id="featureCompatibility">Đang kiểm tra các tính năng của APK...</p><p class="hint">OTA chỉ cập nhật HTML/CSS/JS có chữ ký. Chức năng Android native yêu cầu APK mới.</p></details>
       <details><summary>🛠 NÂNG CAO · GIỚI HẠN THÔNG SỐ</summary><p class="hint">Đổi MIN, MAX, STEP và DEFAULT cho từng thông số. Giới hạn an toàn của Android vẫn được bảo vệ.</p><div id="advancedNumbers"></div><button id="resetLimits" class="btn outline" type="button">KHÔI PHỤC TOÀN BỘ GIỚI HẠN MẶC ĐỊNH</button></details>
       <p class="hint">Tất cả cài đặt lưu trong Android. Không cần bấm Lưu. Màn hình chính OneView không cuộn.</p>
     </div>
@@ -113,13 +115,24 @@
   </section>
 </div>
 <div id="confirm" class="modal" hidden><div class="backdrop"></div><section class="confirm-box" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle"><h3 id="confirmTitle">Xác nhận</h3><p id="confirmText"></p><div class="settings-buttons"><button id="confirmCancel" class="btn outline" type="button">HỦY</button><button id="confirmYes" class="btn red" type="button">ĐỒNG Ý</button></div></section></div>
+<div id="saveModal" class="modal" hidden><div id="saveBackdrop" class="backdrop"></div>
+  <section class="discard-dialog save-dialog" role="dialog" aria-modal="true" aria-labelledby="saveTitle">
+    <h3 id="saveTitle">DỪNG &amp; LƯU BẢN GHI?</h3>
+    <p>Vuốt mũi tên từ trái sang phải đến hết thanh để <strong>kết thúc phiên ghi và lưu các file WAV</strong>. Chạm hoặc vuốt chưa hết sẽ không dừng ghi.</p>
+    <div id="saveTrack" class="swipe-track" aria-label="Vuốt từ trái sang phải để xác nhận lưu">
+      <div class="swipe-fill" id="saveFill"></div><span class="swipe-label">→ VUỐT SANG PHẢI ĐỂ LƯU</span>
+      <div id="saveThumb" class="swipe-thumb" aria-hidden="true">→</div>
+    </div>
+    <button id="cancelSave" class="btn outline" type="button">TIẾP TỤC GHI · HỦY THAO TÁC</button>
+  </section>
+</div>
 <div id="discardModal" class="modal" hidden><div id="discardBackdrop" class="backdrop"></div>
   <section class="discard-dialog" role="dialog" aria-modal="true" aria-labelledby="discardTitle">
     <h3 id="discardTitle">DỪNG &amp; KHÔNG LƯU?</h3>
     <p>Vuốt mũi tên từ trái sang phải đến hết thanh để <strong>hủy toàn bộ file WAV thuộc phiên ghi hiện tại</strong>, kể cả các đoạn đã xuất. Không thể hoàn tác.</p>
-    <div id="discardTrack" class="swipe-track" aria-label="Vuốt từ trái sang phải để xác nhận hủy">
-      <div class="swipe-fill" id="swipeFill"></div><span class="swipe-label">VUỐT SANG PHẢI ĐỂ HỦY →</span>
-      <div id="discardThumb" class="swipe-thumb" aria-hidden="true">➜</div>
+    <div id="discardTrack" class="swipe-track" aria-label="Vuốt từ trái sang phải để xác nhận không lưu">
+      <div class="swipe-fill" id="discardFill"></div><span class="swipe-label">→ VUỐT SANG PHẢI ĐỂ HỦY</span>
+      <div id="discardThumb" class="swipe-thumb" aria-hidden="true">→</div>
     </div>
     <button id="cancelDiscard" class="btn outline" type="button">GIỮ LẠI BẢN GHI · HỦY THAO TÁC</button>
   </section>

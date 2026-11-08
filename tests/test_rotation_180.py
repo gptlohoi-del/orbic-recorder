@@ -26,7 +26,7 @@ assert 'android:screenOrientation="portrait"' in manifest  # The user can opt in
 assert 'body.software-rotated-180' in css and 'rotate(180deg)' in css
 assert 'aria-pressed' in js
 assert "document.body.classList.contains('software-rotated-180')?-1:1" in js
-assert 'swipeDistance=cap((e.clientX-swipeStart)*direction,0,maxSwipe());' in js
+assert 'distance=cap((e.clientX-originX)*direction,0,limit());' in js
 
 start = js.index("  $('rotate180').onclick=()=>{")
 stop = js.index("  for(const id of ['music1'", start)

@@ -283,6 +283,19 @@ public final class RecordingArchive {
         } catch (Exception ignored) { return false; }
     }
 
+    /** Remove a newly opened but NEVER started recording (ARM canceled during setup).
+     * There are no queued exports or public destinations for this session. */
+    public static void abortUnstartedSession(Context context, String session) {
+        try {
+            File metadata = sessionFile(context, session, ".properties");
+            String prefix = PREFIX + session + "_p";
+            File[] staging = folder(context).listFiles((dir, name) ->
+                    name.startsWith(prefix) && (name.endsWith(".wav") || name.endsWith(".pending")));
+            if (staging != null) for (File file : staging) file.delete();
+            if (metadata.isFile()) metadata.delete();
+        } catch (IOException ignored) { /* recovery will clean orphan staging */ }
+    }
+
     /** Must run only after worker has stopped AND all export jobs have passed barrier().
      * If a provider refuses deletion, keep the .discard tombstone for later retry.
      */

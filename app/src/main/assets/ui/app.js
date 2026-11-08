@@ -13,17 +13,14 @@
     {key:'pauseStopFade',label:'Giảm âm PAUSE/STOP và tăng âm TIẾP',unit:'ms',default:2000,min:0,max:10000,step:250,hardMin:0,hardMax:15000,group:'music'},
     {key:'musicVolume',label:'Âm lượng phát nhạc',unit:'%',default:80,min:0,max:100,step:5,group:'music'},
     {key:'listenDelay',label:'Trễ trước khi mở micro trở lại',unit:'ms',default:600,min:0,max:5000,step:100,group:'music'},
-    {key:'threshold',label:'Ngưỡng phát hiện tiếng động',unit:'dBFS',default:-38,min:-70,max:-10,step:1,hardMin:-80,hardMax:-5,group:'rec'},
-    {key:'minSpeech',label:'Thời gian xác nhận có tiếng',unit:'ms',default:180,min:60,max:1000,step:10,hardMin:20,hardMax:2000,group:'rec'},
-    {key:'pre',label:'Giữ âm thanh trước tiếng động',unit:'ms',default:1000,min:0,max:5000,step:100,hardMin:0,hardMax:10000,group:'rec'},
-    {key:'tail',label:'Giữ âm thanh sau tiếng động',unit:'ms',default:1000,min:100,max:5000,step:100,hardMin:100,hardMax:10000,group:'rec'},
-    {key:'warnSeconds',label:'Cảnh báo khi không có tín hiệu',unit:'giây',default:9999,min:10,max:9999,step:1,hardMin:5,hardMax:9999,group:'rec'},
     {key:'limitDb',label:'Ngưỡng Limiter (mức âm đầu ra)',unit:'dBFS',default:-6,min:-18,max:-1,step:1,hardMin:-30,hardMax:-1,group:'protect'},
     {key:'attackMs',label:'Thời gian giảm mức âm (Attack)',unit:'ms',default:10,min:1,max:100,step:1,hardMin:1,hardMax:250,group:'protect'},
     {key:'releaseMs',label:'Thời gian phục hồi mức âm (Release)',unit:'ms',default:500,min:50,max:2000,step:50,hardMin:20,hardMax:5000,group:'protect'},
     {key:'overloadDb',label:'Mức cảnh báo đầu vào gần quá tải',unit:'dBFS',default:-1,min:-12,max:-1,step:1,hardMin:-12,hardMax:-1,group:'protect'},
     {key:'uiFont',label:'Tỷ lệ kích thước chữ toàn giao diện',unit:'%',default:100,min:75,max:160,step:5,group:'view'},
     {key:'noticeFont',label:'Kích thước chữ vùng THÔNG BÁO',unit:'%',default:100,min:75,max:200,step:5,group:'notice'},
+    {key:'noticeWeight',label:'Độ đậm chữ vùng THÔNG BÁO',unit:'',default:900,min:400,max:900,step:100,group:'notice'},
+    {key:'triggerDb',label:'Mức tín hiệu để TỰ BẮT ĐẦU GHI',unit:'dBFS',default:-40,min:-60,max:-15,step:1,group:'record'},
     {key:'uiOpacity',label:'Độ đậm nền các khung',unit:'%',default:100,min:30,max:100,step:5,group:'view'},
     {key:'waveHeight',label:'Độ cao vùng sóng âm',unit:'px',default:92,min:45,max:135,step:5,hardMin:30,hardMax:180,group:'view'}
   ];
@@ -32,8 +29,8 @@
   let current = null;
   let settingsOpened = false;
   let pendingConfirm = null;
-  let discardPending = false;
-  let discardRequestedAt = 0;
+  let finishPending = false;
+  let finishRequestedAt = 0;
   const bars = [];
   const levels = Array(30).fill(0);
   const waveStyles = [
@@ -105,7 +102,6 @@
       input.closest('.wave-style-option').classList.toggle('selected',input.checked);
     }
     renderWaveform();
-    refreshThreshold(coalesce(current && current.threshold, coalesce(data.threshold, -38)));
   }
   function renderWaveform(){
     if(activeWaveStyle==='line'){
@@ -195,33 +191,19 @@
     const noticeScale=cap(Number(coalesce(data.noticeFont,100)),75,200)/100;
     document.documentElement.style.setProperty('--notice-font-size',(10*noticeScale)+'px');
     document.documentElement.style.setProperty('--notice-small-font-size',(9*noticeScale)+'px');
+    document.documentElement.style.setProperty('--notice-weight',cap(Number(coalesce(data.noticeWeight,900)),400,900));
+    const color=/^#[a-f0-9]{6}$/i.test(data.noticeColor||'')?data.noticeColor:'#000000';
+    document.documentElement.style.setProperty('--notice-color',color);
     document.documentElement.style.setProperty('--panel-opacity',cap(Number(coalesce(data.uiOpacity,100)),30,100)/100);
     document.documentElement.style.setProperty('--wave-height',cap(Number(coalesce(data.waveHeight,92)),30,180)+'px');
-  }
-  // Old native APKs do not know thresholdEnabled; keep the UI visible but
-  // disabled so an OTA-only install never promises continuous recording.
-  function updateThresholdSupport(d){
-    const supported=!!d && typeof d.thresholdEnabled==='boolean';
-    const enabled=!supported || d.thresholdEnabled;
-    $('thresholdEnabled').disabled=!supported;
-    $('thresholdEnabled').checked=enabled;
-    setText('thresholdSupport',supported
-      ? 'Bỏ chọn để ghi liên tục, kể cả âm thanh rất nhỏ và khoảng lặng. Có hiệu lực trong khoảng 100 ms; PAUSE và tắt micro khi phát nhạc vẫn hoạt động.'
-      : 'Cần cài APK v9.4.2 trở lên một lần để tắt ngưỡng thực sự. OTA chỉ cập nhật giao diện nên không thể thay thuật toán của APK cũ.');
-    $('thresholdMinus').disabled=$('thresholdPlus').disabled=!enabled;
-    $('waveform').classList.toggle('threshold-disabled',!enabled);
-    const numeric=document.querySelector('[data-key="threshold"]');
-    if(numeric){
-      numeric.classList.toggle('threshold-disabled',!enabled);
-      for(const control of numeric.querySelectorAll('input,button'))control.disabled=!enabled;
-    }
-    return enabled;
   }
   function openSettings() {
     if (!current)return;
     for(const spec of specs) data[spec.key]=coalesce(current[spec.key],spec.default);
     try { limits=JSON.parse(current.numericLimits||'{}')||{}; }catch(e){limits={};}
     data.theme=current.theme||'system';
+    data.noticeColor=current.noticeColor||'#000000';
+    $('noticeColor').value=data.noticeColor;
     data.waveStyle=current.waveStyle||data.waveStyle||'line';
     applyWaveStyle(data.waveStyle);
     specs.forEach(s=>document.querySelector(`[data-key="${s.key}"]`).updateViews());
@@ -232,8 +214,10 @@
     setText('autoRotateHelp',supportsAutoRotate
       ? 'Mặc định TẮT. Bật để xoay theo cảm biến điện thoại; khi tắt ứng dụng khóa màn hình theo chiều dọc. Hai nút XOAY 90° / 180° luôn hoạt động độc lập.'
       : 'Cần cài APK mới để thay đổi tự xoay theo cảm biến. Chỉ cập nhật OTA giao diện là chưa đủ.');
-    $('backupRaw').checked=current.backupRaw===true;
-    updateThresholdSupport(current);
+    $('backupRaw').checked=current.backupRaw!==false;
+    $('backupRaw').disabled=!!current.running||!!current.starting||!!current.saving;
+    document.querySelectorAll('#recordNumbers input, #recordNumbers button').forEach(el=>
+      el.disabled=!!current.running||!!current.armed||!!current.starting||!!current.saving);
     for(const key of ['agcEnabled','limiterEnabled','overloadWarn']) $(key).checked=current[key]!==false;
     setText('agcStatus',current.agcStatus||'Chưa khởi động micro');
     $('splitMinutes').value=String(coalesce(current.splitMinutes,60));
@@ -250,7 +234,19 @@
   $('settingsToggle').onclick=openSettings;
   $('closeSettings').onclick=$('closeBottom').onclick=$('modalBackdrop').onclick=closeSettings;
   $('theme').onchange=()=>{data.theme=$('theme').value;save({theme:data.theme});applyTheme();};
-  $('backupRaw').onchange=()=>save({backupRaw:$('backupRaw').checked});
+  $('noticeColor').onchange=()=>{
+    data.noticeColor=$('noticeColor').value;
+    save({noticeColor:data.noticeColor});applyTheme();
+  };
+  $('autoStart').onclick=()=>{
+    if(!current || !current.supportsInputTrigger || current.running || current.saving ||
+        current.starting || current.recovering)return;
+    send('arm');
+  };
+  $('backupRaw').onchange=()=>{
+    if(current&&(current.running||current.armed)){$('backupRaw').checked=current.backupRaw!==false;return;}
+    save({backupRaw:$('backupRaw').checked});
+  };
   $('autoRotateEnabled').onchange=()=>{
     if(!current || typeof current.autoRotateEnabled!=='boolean')return;
     current.autoRotateEnabled=$('autoRotateEnabled').checked;
@@ -262,15 +258,6 @@
     current.autoOtaEnabled=$('autoOtaEnabled').checked;
     save({autoOtaEnabled:current.autoOtaEnabled});
     setText('saveStatus',current.autoOtaEnabled?'Đã bật tự động cập nhật OTA':'Đã tắt tự động cập nhật OTA');
-  };
-  $('thresholdEnabled').onchange=()=>{
-    if(!current || typeof current.thresholdEnabled!=='boolean')return;
-    const enabled=$('thresholdEnabled').checked;
-    current.thresholdEnabled=enabled;
-    save({thresholdEnabled:enabled});
-    updateThresholdSupport(current);
-    refreshThreshold(coalesce(current.threshold,-38));
-    setText('saveStatus',enabled?'Đã bật lọc ngưỡng':'Đã tắt ngưỡng – ghi liên tục');
   };
   for (const key of ['agcEnabled','limiterEnabled','overloadWarn']) {
     $(key).onchange=()=>save({[key]:$(key).checked});
@@ -313,101 +300,64 @@
           'Bài đang phát sẽ giảm dần âm lượng rồi mới chuyển bài. Bản ghi vẫn được giữ an toàn.',id);
       } else send(id);
     };
-  function changeThreshold(direction){
-    if(!current || current.thresholdEnabled===false)return;
-    const spec=specs.find(s=>s.key==='threshold'),r=rule(spec);
-    const previous=Number(coalesce(current.threshold,coalesce(data.threshold,spec.default)));
-    const next=cap(previous+direction*r.step,r.min,r.max);
-    data.threshold=current.threshold=next;
-    save({threshold:next});
-    refreshThreshold(next);
-  }
-  $('thresholdMinus').onclick=()=>changeThreshold(-1);
-  $('thresholdPlus').onclick=()=>changeThreshold(1);
-  function refreshThreshold(threshold){
-    const t=Number(threshold);
-    setText('thresholdValue',current && current.thresholdEnabled===false?'ĐÃ TẮT':t+' dBFS');
-    // Recorder uses -60..0 dBFS for its level scale; line and bars share it.
-    const height=cap((t+60)/60*100,3,97);
-    $('thresholdLine').style.top=(activeWaveStyle==='mirror'?(100-height)/2:100-height)+'%';
-    $('thresholdMirrorLine').style.top=((100+height)/2)+'%';
-  }
-  $('start').onclick=()=>send('start');
-  // $('pause').onclick=()=>{
-  //   if(current&&current.paused) send('resume');
-  //   else confirmAction('Tạm dừng ghi âm?','Ghi âm sẽ ngừng thủ công và chỉ tiếp tục khi bạn bấm TIẾP TỤC.','pause');
-  // };
-
-  $('pause').onclick=()=>{
-    if(current && current.paused) {
-      send('resume');
-    } else {
-      send('pause');
+  // Both final actions require a deliberate, full-length swipe to the RIGHT.
+  // The native bridge exposes finishRecording only in the new APK; old tap-based
+  // stop/discard actions have been removed from native dispatch.
+  function setupFinishSwipe(kind){
+    const modal=$(kind+'Modal'), track=$(kind+'Track'), thumb=$(kind+'Thumb'), fill=$(kind+'Fill');
+    let pointer=null, originX=0, distance=0, since=0;
+    function reset(){
+      pointer=null;distance=0;
+      thumb.style.transform='translateX(0px)';fill.style.width='0px';
+      track.classList.remove('dragging');
     }
-  };
-  //$('stop').onclick=()=>confirmAction('Dừng và lưu phiên ghi?','Toàn bộ âm thanh đã thu sẽ được hoàn tất và lưu WAV. Phiên lắng nghe sẽ dừng nhưng nhạc đang phát vẫn tiếp tục.','stop');
-  $('stop').onclick=()=>send('stop');
-  // Confirmation requires a real pointer drag across the track.
-  // A tap or a partial swipe can NEVER call the native discard action.
-  const swipeTrack=$('discardTrack'), swipeThumb=$('discardThumb'), swipeFill=$('swipeFill');
-  let swipePointer=null, swipeStart=0, swipeDistance=0, swipeStartedAt=0;
-  function resetSwipe(){
-    swipePointer=null; swipeDistance=0;
-    swipeThumb.style.transform='translateX(0px)';
-    swipeFill.style.width='0px';
-    swipeTrack.classList.remove('dragging');
+    function close(){modal.hidden=true;reset();}
+    $(kind==='save'?'stop':'discard').onclick=()=>{
+      if(!current||!current.running||current.saving||current.starting||finishPending||
+         (kind==='discard'&&!isDiscardSupported(current)))return;
+      if(!$('saveModal').hidden||!$('discardModal').hidden)return;
+      reset();modal.hidden=false;
+    };
+    $(kind==='save'?'cancelSave':'cancelDiscard').onclick=close;
+    $(kind+'Backdrop').onclick=close;
+    const limit=()=>Math.max(0,track.clientWidth-thumb.offsetWidth-8);
+    thumb.addEventListener('pointerdown',e=>{
+      if(pointer!==null||modal.hidden||e.pointerType==='mouse'&&e.button!==0)return;
+      pointer=e.pointerId;originX=e.clientX;distance=0;since=Date.now();
+      track.classList.add('dragging');thumb.setPointerCapture(e.pointerId);e.preventDefault();
+    });
+    thumb.addEventListener('pointermove',e=>{
+      if(e.pointerId!==pointer)return;
+      // Native rotation already maps pointer coordinates. Old CSS 180 fallback
+      // needs the sign inverted to preserve visible rightward motion.
+      const direction=document.body.classList.contains('software-rotated-180')?-1:1;
+      distance=cap((e.clientX-originX)*direction,0,limit());
+      thumb.style.transform='translateX('+distance+'px)';
+      fill.style.width=(distance+thumb.offsetWidth/2)+'px';e.preventDefault();
+    });
+    thumb.addEventListener('pointerup',e=>{
+      if(e.pointerId!==pointer)return;
+      const completed=limit()>0&&distance>=limit()*.92&&Date.now()-since>=180;
+      reset();
+      if(completed&&current&&current.running&&!current.saving&&!current.starting&&
+          !finishPending&&(kind!=='discard'||isDiscardSupported(current))){
+        close();finishPending=true;finishRequestedAt=Date.now();
+        try{if(window.Orbic&&typeof window.Orbic.finishRecording==='function')
+          window.Orbic.finishRecording(kind);
+          else {finishPending=false;setText('error','Cần cài APK v9.5.5 để xác nhận vuốt an toàn');$('error').hidden=false;}
+        }catch(e){finishPending=false;console.error(e);}
+      }
+    });
+    thumb.addEventListener('pointercancel',reset);
+    return close;
   }
-  function closeDiscard(){ $('discardModal').hidden=true;resetSwipe(); }
-  $('discard').onclick=()=>{
-    if(!current||!current.running||current.saving||current.starting||
-        discardPending||!isDiscardSupported(current))return;
-    resetSwipe();$('discardModal').hidden=false;
-  };
-  $('cancelDiscard').onclick=$('discardBackdrop').onclick=closeDiscard;
-  function maxSwipe(){return Math.max(0,swipeTrack.clientWidth-swipeThumb.offsetWidth-8);}
-  swipeThumb.addEventListener('pointerdown',e=>{
-    if(swipePointer!==null||$('discardModal').hidden)return;
-    if(e.pointerType==='mouse' && e.button!==0)return;
-    swipePointer=e.pointerId;swipeStart=e.clientX;swipeDistance=0;
-    swipeStartedAt=Date.now();
-    swipeTrack.classList.add('dragging');
-    swipeThumb.setPointerCapture(e.pointerId);
-    e.preventDefault();
-  });
-  swipeThumb.addEventListener('pointermove',e=>{
-    if(e.pointerId!==swipePointer)return;
-    // A CSS 180-degree rotation on the original APK reverses the visual
-    // horizontal direction but clientX still uses physical viewport axes.
-    // In the newer Android APK the WebView handles touch coordinates itself.
-    const direction=document.body.classList.contains('software-rotated-180')?-1:1;
-    swipeDistance=cap((e.clientX-swipeStart)*direction,0,maxSwipe());
-    swipeThumb.style.transform='translateX('+swipeDistance+'px)';
-    swipeFill.style.width=(swipeDistance+swipeThumb.offsetWidth/2)+'px';
-    e.preventDefault();
-  });
-  swipeThumb.addEventListener('pointerup',e=>{
-    if(e.pointerId!==swipePointer)return;
-    // Full purposeful swipe (not a tap or accidental rapid touch).
-    const completed=maxSwipe()>0 && swipeDistance>=maxSwipe()*.92 &&
-        Date.now()-swipeStartedAt>=180;
-    resetSwipe();
-    if(completed && current && current.running && !current.saving &&
-        !current.starting && !discardPending && isDiscardSupported(current)){
-      $('discardModal').hidden=true;
-      discardPending=true;
-      discardRequestedAt=Date.now();
-      send('discard');
-    }
-  });
-  swipeThumb.addEventListener('pointercancel',resetSwipe);
+  const closeSave=setupFinishSwipe('save');
+  const closeDiscard=setupFinishSwipe('discard');
   function isThirdTrackSupported(d){
-    // v9.4.2 in the user's earlier source already implemented song 3.
-    return !!d && (d.supportsThirdTrack===true ||
-        /^ORBIC RECORDER v9\.4\.2(?:$|\.)/.test(d.nativeLabel||''));
+    return !!d && (d.supportsThirdTrack===true || /^ORBIC RECORDER v9\.4\.2(?:$|\.)/.test(d.nativeLabel||''));
   }
   function isDiscardSupported(d){
-    return !!d && (d.supportsSwipeDiscard===true ||
-        /^ORBIC RECORDER v9\.4\.2(?:$|\.)/.test(d.nativeLabel||''));
+    return !!d && (d.supportsSwipeDiscard===true || /^ORBIC RECORDER v9\.4\.2(?:$|\.)/.test(d.nativeLabel||''));
   }
   function confirmAction(title,message,action){
     setText('confirmTitle',title);setText('confirmText',message);pendingConfirm=action;$('confirm').hidden=false;
@@ -566,18 +516,25 @@
       const d=JSON.parse(window.Orbic.snapshot());current=d;
       if(!settingsOpened && Object.keys(data).length===0){
         for(const spec of specs)data[spec.key]=coalesce(d[spec.key],spec.default);
-        data.theme=d.theme||'system';data.waveStyle=d.waveStyle||'line';applyTheme();applyWaveStyle(data.waveStyle);
+        data.theme=d.theme||'system';data.noticeColor=d.noticeColor||'#000000';
+        data.waveStyle=d.waveStyle||'line';applyTheme();applyWaveStyle(data.waveStyle);
       }
       const playing=d.musicStatus!=='idle', changing=!!d.pendingMusic||!!d.pendingResume;
+      if(finishPending && (!d.running || d.saving || d.error ||
+          Date.now()-finishRequestedAt>8000))finishPending=false;
+      if(!settingsOpened){
+        $('backupRaw').checked=d.backupRaw!==false;
+        $('backupRaw').disabled=!!d.running||!!d.armed||!!d.saving||!!d.starting;
+      }
       const fading=d.musicStatus==='fadingPause'||d.musicStatus==='fadingStop';
       const stopped=!d.running;
       const hasSong3=isThirdTrackSupported(d),hasDiscard=isDiscardSupported(d);
-      if(discardPending && (stopped || d.saving || d.error ||
-          Date.now()-discardRequestedAt>8000)) discardPending=false;
       const hasArchive=d.supportsRecordingLibrary===true;
-      setText('featureCompatibility',hasSong3&&hasDiscard&&hasArchive
-        ? 'APK hỗ trợ phát nhạc, xoay thủ công, hủy phiên ghi và nghe lại WAV.'
-        : 'Cần cài APK mới để dùng đầy đủ BÀI 3, HỦY và THƯ VIỆN GHI ÂM. Chỉ cập nhật giao diện OTA là chưa đủ.');
+      setText('featureCompatibility',hasSong3&&hasDiscard&&hasArchive&&d.supportsInputTrigger===true
+        ? 'APK hỗ trợ tự kích hoạt một lần, ghi liên tục và xác nhận vuốt trái → phải.'
+        : 'Cần cài APK v9.5.5 để dùng TỰ KÍCH HOẠT. OTA giao diện không thêm được tính năng ghi âm native.');
+      document.querySelectorAll('#recordNumbers input, #recordNumbers button').forEach(el=>
+        el.disabled=!!d.running||!!d.armed||!!d.starting||!!d.saving);
       $('openRecordings').disabled=$('playNewest').disabled=!hasArchive;
       $('music3').textContent=hasSong3?'▶ BÀI 3':'BÀI 3 · APK MỚI';
       $('discard').textContent=hasDiscard?'✕ DỪNG & KHÔNG LƯU':'✕ CẦN APK MỚI ĐỂ HỦY';
@@ -600,34 +557,39 @@
       setText('nowPlaying',d.musicTitle||'Chưa phát bài nào');
       setText('musicTime',shortTime(d.musicPosition)+' / '+shortTime(d.musicDuration));
       $('progressFill').style.width=(d.musicDuration>0?cap(d.musicPosition/d.musicDuration*100,0,100):0)+'%';
-      $('musicPause').disabled=!playing||d.musicStatus==='loading'||fading||changing;
+      $('musicPause').disabled=!!d.running||!playing||d.musicStatus==='loading'||fading||changing;
       $('musicPause').textContent=d.musicStatus==='paused'?'▶ TIẾP':'Ⅱ PAUSE';
-      $('musicStop').disabled=!playing&&!changing;
-      $('music1').disabled=$('music2').disabled=changing||!!d.saving||!!d.starting;
-      $('music3').disabled=!hasSong3||changing||!!d.saving||!!d.starting;
-      $('chooseSong3').disabled=!hasSong3||changing||!!d.saving||!!d.starting;
-      $('chooseOther').disabled=changing||!!d.saving||!!d.starting;
+      $('musicStop').disabled=!!d.running||!!d.armed||(!playing&&!changing);
+      $('music1').disabled=$('music2').disabled=!!d.running||!!d.armed||changing||!!d.saving||!!d.starting;
+      $('music3').disabled=!!d.running||!!d.armed||!hasSong3||changing||!!d.saving||!!d.starting;
+      $('chooseSong1').disabled=$('chooseSong2').disabled=!!d.running||!!d.armed||changing||!!d.saving||!!d.starting;
+      $('chooseSong3').disabled=!!d.running||!!d.armed||!hasSong3||changing||!!d.saving||!!d.starting;
+      $('chooseOther').disabled=!!d.running||!!d.armed||changing||!!d.saving||!!d.starting;
       $('music1').classList.toggle('active-song',playing && d.activeSlot===1);
       $('music2').classList.toggle('active-song',playing && d.activeSlot===2);
       $('music3').classList.toggle('active-song',playing && d.activeSlot===3);
       // Điều khiển ghi âm độc lập với điều khiển nhạc.
       // Android sẽ giữ micro tắt trong suốt thời gian nhạc phát.
-      $('start').disabled=!!d.running||!!d.saving||!!d.recovering||!!d.starting;
-      $('pause').disabled=stopped||!!d.saving||!!d.starting;
-      $('pause').textContent=d.paused?'▶ TIẾP TỤC':'Ⅱ PAUSE';
-      $('stop').disabled=stopped||!!d.saving||!!d.starting;
-      $('discard').disabled=!hasDiscard||stopped||!!d.saving||!!d.starting||discardPending;
-      if(!stopped && d.saving && !$('discardModal').hidden)closeDiscard();
-      if(stopped && !$('discardModal').hidden)closeDiscard();
+      $('start').disabled=!!d.running||!!d.armed||!!d.saving||!!d.recovering||!!d.starting;
+      $('autoStart').disabled=!d.supportsInputTrigger||!!d.running||!!d.saving||!!d.recovering||!!d.starting;
+      $('autoStart').classList.toggle('active',!!d.armed||!!d.autoStarted&&!!d.running);
+      $('autoStart').setAttribute('aria-pressed',d.armed||d.autoStarted&&d.running?'true':'false');
+      $('autoStart').textContent=d.armed?'◉ ĐANG CHỜ TÍN HIỆU · CHẠM ĐỂ HỦY':
+          d.running&&d.autoStarted?'● TỰ KÍCH HOẠT · ĐANG GHI':
+          '◉ BẮT ĐẦU GHI KHI CÓ TÍN HIỆU';
+            $('stop').disabled=stopped||!!d.saving||!!d.starting||finishPending;
+      $('discard').disabled=!hasDiscard||stopped||!!d.saving||!!d.starting||finishPending;
+      if((stopped||d.saving)&&!$('discardModal').hidden)closeDiscard();
+      if((stopped||d.saving)&&!$('saveModal').hidden)closeSave();
       // Native APK v9.1+ provides a device-level AGC availability flag even before START.
       setText('agcSupport',typeof d.agcSupported==='boolean'
         ? (d.agcSupported?'CÓ HỖ TRỢ (API Android)':'KHÔNG HỖ TRỢ (API Android)')
         : 'CẦN CẬP NHẬT APK ĐỂ KIỂM TRA');
       setText('agcStatus',d.agcStatus||'Chưa khởi động micro');
-      setText('capture',d.capture||'Sẵn sàng');setText('recordState',d.paused?'PAUSE':d.running?'Đã START':'Sẵn sàng');
+      setText('capture',d.capture||'Sẵn sàng');setText('recordState',d.running?'Đang ghi ●':d.armed?'Đang chờ ◉':'Sẵn sàng');
       setText('db',(d.db||'—')+' dBFS');
       setText('elapsed',fmt(d.elapsedMs));setText('kept',fmt(d.keptMs));setText('segments',d.segments||0);
-      setText('noticeMetrics','Tổng '+fmt(d.elapsedMs)+' · Đã giữ '+fmt(d.keptMs)+' · '+(d.savedParts||0)+' file');
+      setText('noticeMetrics','Đã thu '+fmt(d.elapsedMs)+' · '+(d.savedParts||0)+' file đã lưu');
       setText('file',d.file||'Chưa có bản ghi');setText('savedParts',(d.savedParts||0)+' đoạn đã lưu');
       if(d.file && d.file!==lastArchivedFile){
         // A freshly exported WAV becomes available after the native file field changes.
@@ -639,21 +601,18 @@
       updateRecordingPlayer(d);
       setText('error',d.error||'');$('error').hidden=!d.error;
       if(d.error) setText('capture','⚠ '+d.error);
-      setText('otaVersion','Giao diện '+(d.otaVersion||'8.0.9'));setText('otaMessage',d.otaMessage||'Chưa kiểm tra');
+      setText('otaVersion','Giao diện '+(d.otaVersion||'8.0.15'));setText('otaMessage',d.otaMessage||'Chưa kiểm tra');
       if(!settingsOpened){
         const supportsAutoOta=typeof d.autoOtaEnabled==='boolean';
         $('autoOtaEnabled').disabled=!supportsAutoOta;
         $('autoOtaEnabled').checked=supportsAutoOta && d.autoOtaEnabled;
       }
-      $('installOta').disabled=!d.otaAvailable||d.otaStatus!=='available'||d.running||d.saving||playing||changing;
+      $('installOta').disabled=!d.otaAvailable||d.otaStatus!=='available'||d.running||d.armed||d.saving||playing||changing;
       $('rollback').hidden=!d.canRollback;
-      levels.shift();levels.push(d.running&&!d.paused&&!d.musicAudible&&!changing&&!d.musicSuspended?cap(Number(d.level||0),0,100):0);
+      levels.shift();levels.push((d.running||d.armed)?cap(Number(d.level||0),0,100):0);
       renderWaveform();
-      if(!settingsOpened) data.threshold=coalesce(d.threshold,data.threshold);
-      updateThresholdSupport(d);
-      refreshThreshold(coalesce(d.threshold,-38));
       if(!settingsOpened){
-        for(const key of ['uiFont','noticeFont','uiOpacity','waveHeight','theme']) data[key]=coalesce(d[key],data[key]);
+        for(const key of ['uiFont','noticeFont','noticeWeight','noticeColor','uiOpacity','waveHeight','theme']) data[key]=coalesce(d[key],data[key]);
         if((d.waveStyle||'line')!==activeWaveStyle)applyWaveStyle(d.waveStyle||'line');
         applyTheme();
       }

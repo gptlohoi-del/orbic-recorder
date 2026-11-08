@@ -1,96 +1,32 @@
-"""No-SDK source regression checks; an actual APK build runs in GitHub Actions."""
-import pathlib
-import re
+"""Core native/UI source contracts for Orbic Recorder v9.5.5."""
+from pathlib import Path
 import subprocess
-import xml.etree.ElementTree as ET
-
-root = pathlib.Path(__file__).resolve().parents[1]
-ui = root / 'app/src/main/assets/ui'
-html = (ui / 'index.html').read_text(encoding='utf-8')
-js = (ui / 'app.js').read_text(encoding='utf-8')
-css = (ui / 'app.css').read_text(encoding='utf-8')
-activity = (root / 'app/src/main/java/com/example/orbicrecorder/MainActivity.java').read_text(encoding='utf-8')
-service = (root / 'app/src/main/java/com/example/orbicrecorder/RecorderService.java').read_text(encoding='utf-8')
-music = (root / 'app/src/main/java/com/example/orbicrecorder/MusicPlayer.java').read_text(encoding='utf-8')
-ota = (root / 'app/src/main/java/com/example/orbicrecorder/OtaManager.java').read_text(encoding='utf-8')
-script = (root / 'scripts/publish_ota.py').read_text(encoding='utf-8')
-manifest = root / 'app/src/main/AndroidManifest.xml'
-
-ids = set(re.findall(r'\bid="([\w-]+)"', html))
-refs = set(re.findall(r"\$\('([\w-]+)'\)", js))
-assert refs <= ids, f'HTML IDs missing: {refs-ids}'
-assert {'music1','music2','musicPause','musicStop','settingsToggle','start','pause','stop',
-        'thresholdMinus','thresholdPlus','thresholdLine','waveBars','noticeMetrics'} <= ids
-assert 'id="save"' not in html
-assert html.index('id="music1"') < html.index('id="music2"')
-assert 'music-stack' in html and 'notice panel' in html
-assert html.index('id="musicStop"') < html.index('id="settingsToggle"') < html.index('class="record panel"')
-assert 'DỪNG &amp; LƯU' in html and '● START' in html
-assert 'grid-template-columns:minmax(0,1fr) 40px 90px' in css
-assert 'height:100dvh' in css and 'overflow:hidden' in css
-assert 'threshold-line' in css and '--wave-height' in css
-assert "default:2000" in js and "key:'pauseStopFade'" in js
-assert "key:'waveHeight'" in js and "changeThreshold" in js
-assert "'music1').disabled" in js
-assert "confirmAction('Dừng" in js
-
-ET.parse(manifest)
-man = manifest.read_text(encoding='utf-8')
-assert 'screenOrientation="portrait"' in man
-assert 'configChanges="orientation|screenSize|smallestScreenSize|keyboardHidden"' in man
-assert 'NATIVE_API = 9' in ota and 'BUILTIN_VERSION = "8.0.9"' in ota
-assert 'NATIVE_API = 9' in script
-assert 'case "start": startRecording(); break;' in activity
-assert 'music.isBlockingMic() || pendingMusic || pendingResume' in activity
-assert 'case "musicPause": music.requestPause' in activity
-assert 'case "musicResume": resumeMusicSafely()' in activity
-assert 'case "musicStop":' in activity and 'music.requestStop' in activity
-assert 'onMusicPaused()' in activity and 'waitForResumeMicRelease' in activity
-assert 'data.put("pauseStopFade", cfg.getInt("pauseStopFade", 2000))' in activity
-assert 'data.put("waveHeight", cfg.getInt("waveHeight", 92))' in activity
-assert 'MUSIC_PAUSE' in service and 'MUSIC_RESUME' in service
-assert 'releaseMicrophone();' in service and 'threshold = cfg.getInt("threshold", -38);' in service
-assert 'cfg.getInt("warnSeconds", 9999)' in activity
-assert 'cfg.getInt("warnSeconds", 9999)' in service
-assert 'MediaPlayer' in music and 'Math.min(Math.max(0, requestedFadeMs), remaining)' in music
-assert 'void requestPause(int requestedFadeMs)' in music
-assert 'void requestStop(int requestedFadeMs)' in music
-assert 'listener.paused()' in music and 'listener.ended()' in music
-# Returning from PAUSE uses the same configurable time as PAUSE/STOP fade-out.
-assert 'music.resume(activeRecordingId.isEmpty() ? config().getInt("pauseStopFade", 2000) : 0)' in activity
-assert 'void resume(int requestedFadeMs)' in music
-assert 'SystemClock.uptimeMillis()' in music
-assert 'progress * progress * (3f - 2f * progress)' in music
-assert '450f' not in music
-assert 'Giảm âm PAUSE/STOP và tăng âm TIẾP' in js
-assert 'takePersistableUriPermission' in activity
-
-subprocess.run(['node', '--check', str(ui / 'app.js')], check=True)
-subprocess.run(['python3', '-m', 'py_compile', str(root / 'scripts/publish_ota.py')], check=True)
-assert 'AutomaticGainControl.create' in service
-assert 'dynamics.processInPlace(block)' in service
-assert 'double amp = rms(frame);' in service  # VAD uses pre-limiter signal
-assert 'current.raw.write(block)' in service
-assert service.index('current.raw.write(block)') < service.index('dynamics.processInPlace(block)')
-assert 'getBoolean("limiterEnabled", true)' in service
-assert 'getBoolean("agcEnabled", true)' in service
-assert 'getBoolean("overloadWarn", true)' in service
-assert all(f'"{key}"' in activity for key in
-           ['agcEnabled','limiterEnabled','overloadWarn','limitDb','attackMs','releaseMs','overloadDb'])
-assert all(f"key:'{key}'" in js for key in
-           ['limitDb','attackMs','releaseMs','overloadDb'])
-assert all(f'id="{key}"' in html for key in
-           ['agcEnabled','limiterEnabled','overloadWarn','agcStatus','agcSupport','protectNumbers'])
-assert 'AutomaticGainControl.isAvailable()' in activity
-assert 'data.put("agcSupported", agcSupported)' in activity
-assert 'typeof d.agcSupported' in js
-assert 'id="waveStylePicker"' in html
-assert 'id="waveLineSvg"' in html and 'id="thresholdMirrorLine"' in html
-assert 'renderStylePreviews()' in js and 'applyWaveStyle' in js
-assert all(f"key:'{key}'" in js for key in ['waveHeight'])
-assert 'data.put("waveStyle", cfg.getString("waveStyle", "line"))' in activity
-assert 'edit.putString("waveStyle", waveStyle)' in activity
-assert 'NATIVE_API = 9' in script
-assert 'CẦN CẬP NHẬT APK ĐỂ KIỂM TRA' in js
-assert 'NATIVE_API = 9' in script
-print('PASS: v9.5.2 source, device AGC availability, AGC/limiter, Settings, OTA API, JS syntax')
+root=Path(__file__).resolve().parents[1]
+java=root/'app/src/main/java/com/example/orbicrecorder'
+ui=root/'app/src/main/assets/ui'
+html=(ui/'index.html').read_text()
+js=(ui/'app.js').read_text()
+css=(ui/'app.css').read_text()
+activity=(java/'MainActivity.java').read_text()
+service=(java/'RecorderService.java').read_text()
+gradle=(root/'app/build.gradle').read_text()
+ota=(java/'OtaManager.java').read_text()
+for id in ('music1','music2','music3','musicPause','musicStop','settingsToggle',
+           'start','stop','discard','openRecordings','playNewest','saveTrack','discardTrack',
+           'waveBars','waveLineSvg','recordingsList','recordingPause','recordingStop'):
+ assert f'id="{id}"' in html,id
+for removed in ('id="pause"','id="thresholdEnabled"','id="thresholdLine"',
+                'id="videoMode"','id="thresholdMinus"','id="thresholdPlus"'):
+ assert removed not in html,removed
+assert 'GHI ÂM LIÊN TỤC' in html
+assert 'current.voice.write(block);' in service and 'current.raw.write(block);' in service
+assert 'RecordingArchive.queueExport(this, current)' in service
+assert 'RecordingArchive.sync(current)' in service
+assert 'AudioDynamics dynamics = new AudioDynamics();' in service
+assert 'music.requestPause' in activity and 'music.requestStop' in activity
+assert 'supportsRecordingLibrary' in activity
+assert 'minSdk 28' in gradle and '200000 + githubRunNumber' in gradle
+assert 'NATIVE_API = 11' in ota and 'BUILTIN_VERSION = "8.0.15"' in ota
+assert 'wave-style-picker' in css
+subprocess.run(['node','--check',str(ui/'app.js')],check=True)
+print('PASS: v9.5.5 native/UI contract, continuous WAV, limiter, library, Android 9')

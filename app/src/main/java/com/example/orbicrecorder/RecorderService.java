@@ -15,18 +15,16 @@ import android.media.audiofx.AutomaticGainControl;
 import android.os.IBinder;
 
 import java.io.IOException;
-import java.util.ArrayDeque;
 import java.util.Arrays;
-import java.util.Deque;
 import java.util.Locale;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Native v5.1: one 16-kHz capture stream writes a full, unfiltered backup (optional)
- * and threshold-filtered (or continuous) audio at the same time. Both are split into durable 15-min
- * default segments. A disk executor publishes closed WAV files without blocking
- * AudioRecord. "Pause" suspends *both* outputs.
+ * Continuous 16-kHz PCM recorder. Every frame is written into the WAV timeline.
+ * Optional RAW backup stores samples before the software limiter.
+ * Optional one-shot input trigger: hold a short pre-roll while armed, then save
+ * all frames continuously until explicit SAVE or DISCARD. No silence cutting.
  */
 public class RecorderService extends Service {
     private static final String CHANNEL = "orbic_recording_v4";
@@ -38,10 +36,8 @@ public class RecorderService extends Service {
     static boolean isProcessCapturing() { return PROCESS_CAPTURING.get(); }
 
     private volatile boolean recording;
-    private volatile boolean paused;
+    private volatile boolean armed;
     private volatile boolean stopping;
-    private volatile boolean musicHold;
-    private volatile boolean saveRequested;
     private volatile boolean discardRequested;
     private AudioRecord audio;
     private AutomaticGainControl hardwareAgc;
@@ -69,27 +65,15 @@ public class RecorderService extends Service {
 
     private Notification notification() {
         int flags = PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT;
-        PendingIntent stop = PendingIntent.getService(this, 1,
-                new Intent(this, RecorderService.class).setAction("STOP"), flags);
-        PendingIntent toggle = PendingIntent.getService(this, 2,
-                new Intent(this, RecorderService.class).setAction(paused ? "RESUME" : "PAUSE"), flags);
         return new Notification.Builder(this, CHANNEL)
                 .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-                .setContentTitle("Orbic Recorder v9.5 – Bản ghi an toàn")
-                .setContentText(stopping ? "Đang hoàn thiện WAV" : paused ? "Đang tạm dừng" :
-                        musicHold ? "Micro tắt – nhạc đang phát" :
-                                config().getBoolean("thresholdEnabled", false) ?
-                                        "Đang lọc khoảng lặng" : "Đang ghi liên tục")
+                .setContentTitle("Orbic Recorder – Ghi âm liên tục")
+                .setContentText(stopping ? "Đang hoàn thiện WAV" : armed ? "Đang chờ tín hiệu từ micro – chạm ứng dụng để hủy chờ"
+                        : "Đang ghi liên tục – mở ứng dụng để LƯU / KHÔNG LƯU")
                 .setOnlyAlertOnce(true)
                 .setContentIntent(PendingIntent.getActivity(this, 0,
                         new Intent(this, MainActivity.class), flags))
-                .setOngoing(true)
-                // An OS notification provides rescue controls even if a WebView
-                // OTA fails or the app is switched to the background.
-                .addAction(android.R.drawable.ic_media_pause,
-                        paused ? "▶ TIẾP GHI" : "Ⅱ PAUSE", toggle)
-                .addAction(android.R.drawable.ic_menu_save, "■ DỪNG & LƯU", stop)
-                .build();
+                .setOngoing(true).build();
     }
 
     private void notifyChanged() {
@@ -100,20 +84,20 @@ public class RecorderService extends Service {
         String action = intent == null ? "" : intent.getAction();
         switch (action) {
             case "START":
-            case "START_HELD":
-                if (!recording && !stopping && !RecordingArchive.isRecovering()) {
+            case "ARM":
+                if (!recording && !armed && !stopping && !RecordingArchive.isRecovering()) {
                     startForeground(NOTIFICATION_ID, notification());
-                    // START_HELD tạo phiên ghi hợp lệ nhưng TUYỆT ĐỐI không mở micro
-                    // trong lúc nhạc đang phát. MUSIC_RESUME mới mở micro trở lại.
-                    startCapture("START_HELD".equals(action));
+                    startCapture("ARM".equals(action));
                 }
+                break;
+            case "DISARM":
+                if (armed && !recording && !stopping) armed = false;
                 break;
             case "STOP_DISCARD":
                 if (recording && !stopping) {
                     String session = state().getString("activeSession", "");
                     try {
-                        // Durable marker must be flushed BEFORE recording stops.
-                        // Crash recovery will never re-publish abandoned audio.
+                        // Write tombstone before stopping, so crash recovery will not republish.
                         RecordingArchive.markDiscard(this, session);
                         discardRequested = true;
                         stopping = true;
@@ -132,86 +116,45 @@ public class RecorderService extends Service {
                     stopping = true;
                     recording = false;
                     state().edit().putBoolean("saving", true)
-                            .putString("capture", "ĐANG LƯU CÁC ĐOẠN").apply();
+                            .putString("capture", "ĐANG LƯU FILE WAV").apply();
                     notifyChanged();
-                } else if (!stopping) stopSelf();
+                } else if (!stopping && !armed) stopSelf();
                 break;
-            case "PAUSE":
-                if (recording && !stopping) {
-                    paused = true;
-                    state().edit().putBoolean("paused", true)
-                            .putString("capture", "TẠM DỪNG").apply();
-                    notifyChanged();
-                }
-                break;
-            case "MUSIC_PAUSE":
-                if (recording && !stopping) {
-                    boolean alreadyReleased = musicHold &&
-                            state().getBoolean("musicSuspended", false);
-                    musicHold = true;
-                    // If mic was already released, do not erase the acknowledgement.
-                    if (!alreadyReleased) {
-                        state().edit().putBoolean("musicSuspended", false)
-                                .putString("capture", "ĐANG CHUYỂN SANG PHÁT NHẠC").apply();
-                    }
-                }
-                break;
-            case "MUSIC_RESUME":
-                musicHold = false;
-                state().edit().putBoolean("musicSuspended", false).apply();
-                break;
-            case "SAVE":
-                if (recording && !stopping && !musicHold) saveRequested = true;
-                break;
-            case "RESUME":
-                if (recording && !stopping) {
-                    paused = false;
-                    state().edit().putBoolean("paused", false)
-                            .putString("capture", musicHold ? "NHẠC ĐANG PHÁT – MICRO TẮT" :
-                                    config().getBoolean("thresholdEnabled", false)
-                                            ? "ĐANG CHỜ TIẾNG ĐỘNG" : "ĐANG GHI LIÊN TỤC").apply();
-                    notifyChanged();
-                }
-                break;
+            // Ignore legacy notification and old OTA commands. Only STOP or
+            // STOP_DISCARD can finish; there is no pausing the recording.
             default: break;
         }
         return START_NOT_STICKY;
     }
 
-    private void startCapture(boolean startHeld) {
+    private void startCapture(boolean automatic) {
         PROCESS_CAPTURING.set(true);
         try {
             SharedPreferences cfg = config();
-            String session = RecordingArchive.makeSessionId();
-            // Preserve previous recording metadata so discard cannot clear it.
+            // No session or output file exists during waiting; canceled waiting is clean.
+            String session = automatic ? null : RecordingArchive.makeSessionId();
             String priorUri = state().getString("uri", "");
             String priorFile = state().getString("file", "Chưa có bản ghi");
             String priorRaw = state().getString("lastRaw", "");
-            RecordingArchive.saveSession(this, session, cfg.getString("treeUri", ""),
+            if (!automatic) RecordingArchive.saveSession(this, session, cfg.getString("treeUri", ""),
                     cfg.getString("folderLabel", "Music/OrbicRecorder"));
-            // Không lấy quyền AudioRecord nếu phát nhạc đang diễn ra.
-            if (!startHeld) {
-                audio = openMicrophone();
-                audio.startRecording();
-            }
-            recording = true;
-            paused = false;
+            audio = openMicrophone();
+            audio.startRecording();
+            recording = !automatic;
+            armed = automatic;
             stopping = false;
-            musicHold = startHeld;
-            saveRequested = false;
             discardRequested = false;
             AudioDeviceInfo device = audio == null ? null : audio.getRoutedDevice();
-            state().edit().putBoolean("running", true).putBoolean("saving", false)
-                    .putBoolean("paused", false).putBoolean("musicSuspended", startHeld)
-                    .putBoolean("overload", false).putString("agcStatus", startHeld ? "Đợi nhạc dừng" : hardwareAgcStatus)
+            state().edit().putBoolean("running", !automatic).putBoolean("armed", automatic)
+                    .putBoolean("autoStarted", false).putBoolean("saving", false)
+                    .putBoolean("paused", false).putBoolean("musicSuspended", false)
+                    .putBoolean("overload", false).putString("agcStatus", hardwareAgcStatus)
                     .putBoolean("starting", false).putString("error", "")
-                    .putString("capture", startHeld ? "NHẠC ĐANG PHÁT – MICRO TẮT" :
-                            config().getBoolean("thresholdEnabled", false)
-                                    ? "ĐANG CHỜ TIẾNG ĐỘNG" : "ĐANG GHI LIÊN TỤC")
-                    .putString("activeSession", session)
+                    .putString("capture", automatic ? "◉ ĐANG CHỜ TÍN HIỆU ĐẦU VÀO" : "● ĐANG GHI LIÊN TỤC")
+                    .putString("activeSession", automatic ? "" : session)
                     .putString("priorUri", priorUri).putString("priorFile", priorFile)
                     .putString("priorLastRaw", priorRaw)
-                    .putString("file", "Đang ghi phiên " + session)
+                    .putString("file", automatic ? priorFile : "Đang ghi phiên " + session)
                     .putLong("elapsedMs", 0).putLong("keptMs", 0)
                     .putInt("segments", 0).putInt("savedParts", 0)
                     .putInt("level", 0).putInt("part", 1).putString("lastRaw", "")
@@ -219,16 +162,17 @@ public class RecorderService extends Service {
                     .putString("source", device == null ? "Chưa xác định" :
                             String.valueOf(device.getProductName()) + " (type " + device.getType() + ")")
                     .apply();
-            worker = new Thread(() -> captureLoop(session), "OrbicVoiceWriterV7");
+            notifyChanged();
+            worker = new Thread(() -> captureLoop(session, automatic, priorUri, priorFile, priorRaw),
+                    "OrbicVoiceWriterV8");
             worker.start();
         } catch (Exception e) {
             PROCESS_CAPTURING.set(false);
             recording = false;
-            paused = false;
+            armed = false;
             stopping = false;
-            musicHold = false;
-            saveRequested = false;
-            state().edit().putBoolean("running", false).putBoolean("saving", false)
+            state().edit().putBoolean("running", false).putBoolean("armed", false)
+                    .putBoolean("saving", false)
                     .putBoolean("starting", false).putString("error", "Không bắt đầu được: " + e.getMessage()).apply();
             if (audio != null) { try { audio.release(); } catch (Exception ignored) {} audio = null; }
             stopForeground(true);
@@ -299,19 +243,6 @@ public class RecorderService extends Service {
         }
     }
 
-    private static void trim(Deque<byte[]> deque, int maximum) {
-        while (deque.size() > maximum) deque.removeFirst();
-    }
-
-    private static long flush(RecordingArchive.Segment segment, Deque<byte[]> queue)
-            throws IOException {
-        long count = 0;
-        for (byte[] item : queue) { segment.voice.write(item); count += item.length; }
-        segment.voiceBytes += count;
-        queue.clear();
-        return count;
-    }
-
     private static double rms(byte[] bytes) {
         long power = 0;
         for (int i = 0; i + 1 < bytes.length; i += 2) {
@@ -321,18 +252,13 @@ public class RecorderService extends Service {
         return Math.sqrt((double) power / (bytes.length / 2));
     }
 
-    private void captureLoop(String session) {
+    private void captureLoop(String session, boolean automatic,
+                             String priorUri, String priorFile, String priorRaw) {
         SharedPreferences cfg = config();
-        int threshold = cfg.getInt("threshold", -38);
-        boolean thresholdEnabled = cfg.getBoolean("thresholdEnabled", false);
-        int confirm = Math.max(1, (cfg.getInt("minSpeech", 180) + FRAME_MS - 1) / FRAME_MS);
-        int preFrames = Math.max(0, (cfg.getInt("pre", 1000) + FRAME_MS - 1) / FRAME_MS);
-        int tailFrames = Math.max(1, (cfg.getInt("tail", 1000) + FRAME_MS - 1) / FRAME_MS);
-        int warnFrames = Math.max(1, cfg.getInt("warnSeconds", 9999) * 1000 / FRAME_MS);
         int splitMinutes = cfg.getInt("splitMinutes", 60);
         if (splitMinutes < 1 || splitMinutes > 60) splitMinutes = 60;
         long splitFrames = (long) splitMinutes * 60 * 1000 / FRAME_MS;
-        boolean saveRaw = cfg.getBoolean("backupRaw", false);
+        final boolean saveRaw = automatic || cfg.getBoolean("backupRaw", true);
         AudioDynamics dynamics = new AudioDynamics();
         boolean limiter = cfg.getBoolean("limiterEnabled", true);
         boolean overloadWarn = cfg.getBoolean("overloadWarn", true);
@@ -341,97 +267,91 @@ public class RecorderService extends Service {
         dynamics.configure(limiter, cfg.getInt("limitDb", -6),
                 cfg.getInt("attackMs", 10), cfg.getInt("releaseMs", 500));
 
-        Deque<byte[]> pre = new ArrayDeque<>();
-        Deque<byte[]> candidate = new ArrayDeque<>();
-        Deque<byte[]> tail = new ArrayDeque<>();
-        boolean active = false, wasPaused = false;
-        long elapsed = 0, kept = 0, silence = 0, partFrames = 0;
-        int segments = 0, part = 1;
+        long elapsed = 0, keptBytes = 0, partFrames = 0;
+        int part = 1;
         RecordingArchive.Segment current = null;
         byte[] frame = new byte[FRAME_SIZE];
+        // Pre-roll and one-shot input qualification are independently unit-tested.
+        final int triggerDb = Math.max(-60, Math.min(-15, cfg.getInt("triggerDb", -40)));
+        InputSignalTrigger signal = new InputSignalTrigger(triggerDb, 50, 5);
+        long waitingFrames = 0;
         try {
-            current = RecordingArchive.open(this, session, part, saveRaw);
-            while (recording) {
-                // IMPORTANT: release Android AudioRecord, not just mute its samples.
-                // The audio focus and music player start only after this acknowledgement.
-                if (musicHold) {
-                    if (active && !tail.isEmpty()) kept += flush(current, tail);
-                    tail.clear(); pre.clear(); candidate.clear();
-                    active = false;
-                    wasPaused = true;
-                    RecordingArchive.sync(current);
-                    releaseMicrophone();
-                    state().edit().putBoolean("musicSuspended", true)
-                            .putBoolean("overload", false).putInt("level", 0).putString("db", "—")
-                            .putString("agcStatus", "Micro tắt khi phát nhạc")
-                            .putString("capture", "ĐANG PHÁT NHẠC – MICRO ĐÃ TẮT").apply();
-                    while (recording && musicHold) {
-                        // A second PLAY may arrive before the mic reopens. Re-acknowledge
-                        // the already released mic, instead of timing out on stale state.
-                        if (!state().getBoolean("musicSuspended", false))
-                            state().edit().putBoolean("musicSuspended", true).apply();
-                        try { Thread.sleep(40); } catch (InterruptedException ignored) {}
-                    }
-                    if (!recording) break;
-                    audio = openMicrophone();
-                    audio.startRecording();
-                    state().edit().putBoolean("musicSuspended", false)
-                            .putString("capture", paused ? "ĐANG TẠM DỪNG" :
-                                    cfg.getBoolean("thresholdEnabled", false)
-                                            ? "ĐANG CHỜ TIẾNG ĐỘNG" : "ĐANG GHI LIÊN TỤC").apply();
-                    pre.clear(); candidate.clear(); tail.clear();
-                    wasPaused = false;
-                    silence = 0;
-                    continue;
-                }
+            if (!automatic) current = RecordingArchive.open(this, session, part, saveRaw);
+            while (recording || armed) {
                 int filled = 0;
-                while (recording && filled < FRAME_SIZE) {
+                while ((recording || armed) && filled < FRAME_SIZE) {
                     int size = audio.read(frame, filled, FRAME_SIZE - filled);
                     if (size > 0) filled += size;
                     else if (size < 0) throw new IOException("AudioRecord.read: " + size);
                 }
                 if (filled != FRAME_SIZE) break;
-                if (paused) {
-                    if (!wasPaused) {
-                        if (active && !tail.isEmpty()) kept += flush(current, tail);
-                        tail.clear(); pre.clear(); candidate.clear();
-                        active = false;
-                        wasPaused = true;
-                        RecordingArchive.sync(current);
+                byte[] block = Arrays.copyOf(frame, FRAME_SIZE);
+                if (armed) {
+                    boolean detected = signal.offer(block);
+                    if (!detected) {
+                        // Update the UI 5 times/second, not every 20ms PCM frame.
+                        if (++waitingFrames % 10 == 0) {
+                            double signalDb = signal.lastDb();
+                            int meter = (int) Math.max(0, Math.min(100, (signalDb + 60) * 100 / 60));
+                            state().edit().putInt("level", meter)
+                                    .putString("db", String.format(Locale.US, "%.1f", Math.max(-120, signalDb)))
+                                    .putString("capture", "◉ ĐANG CHỜ TÍN HIỆU (kích hoạt ≥ " + triggerDb + " dBFS)")
+                                    .apply();
+                        }
+                        continue;
                     }
-                    state().edit().putInt("level", 0).putBoolean("overload", false).apply();
+                    if (!armed) break; // User canceled while micro was being read.
+                    session = RecordingArchive.makeSessionId();
+                    RecordingArchive.saveSession(this, session,
+                            cfg.getString("treeUri", ""),
+                            cfg.getString("folderLabel", "Music/OrbicRecorder"));
+                    current = RecordingArchive.open(this, session, part, saveRaw);
+                    // A cancel pressed during storage setup must never silently become START.
+                    if (!armed) {
+                        try { RecordingArchive.close(current); }
+                        finally {
+                            current = null;
+                            RecordingArchive.abortUnstartedSession(this, session);
+                            session = null;
+                        }
+                        break;
+                    }
+                    // Set running before leaving waiting state, avoiding a capture gap.
+                    recording = true;
+                    armed = false;
+                    state().edit().putBoolean("armed", false).putBoolean("running", true)
+                            .putBoolean("autoStarted", true)
+                            .putString("activeSession", session)
+                            .putString("priorUri", priorUri).putString("priorFile", priorFile)
+                            .putString("priorLastRaw", priorRaw)
+                            .putString("file", "Đang ghi phiên " + session)
+                            .putString("capture", "● ĐÃ KÍCH HOẠT – ĐANG GHI LIÊN TỤC")
+                            .apply();
+                    notifyChanged();
+                    // Every pre-roll frame, including the triggering frame, is written ONCE.
+                    for (byte[] buffered : signal.drainPreRoll()) {
+                        if (current.raw != null) {
+                            current.raw.write(buffered);
+                            current.rawBytes += buffered.length;
+                        }
+                        byte[] processed = Arrays.copyOf(buffered, buffered.length);
+                        dynamics.processInPlace(processed);
+                        current.voice.write(processed);
+                        current.voiceBytes += processed.length;
+                        keptBytes += processed.length;
+                        elapsed++;
+                        partFrames++;
+                    }
                     continue;
                 }
-                if (wasPaused) {
-                    pre.clear(); candidate.clear(); tail.clear();
-                    active = false; wasPaused = false; silence = 0;
-                }
-
-                if (saveRequested) {
-                    saveRequested = false;
-                    if (active && !tail.isEmpty()) kept += flush(current, tail);
-                    RecordingArchive.close(current);
-                    RecordingArchive.queueExport(this, current);
-                    current = null;
-                    part++;
-                    current = RecordingArchive.open(this, session, part, saveRaw);
-                    partFrames = 0;
-                    active = false;
-                    tail.clear(); pre.clear(); candidate.clear();
-                    state().edit().putInt("part", part)
-                            .putString("capture", thresholdEnabled
-                                    ? "ĐÃ LƯU ĐOẠN – ĐANG LẮNG NGHE"
-                                    : "ĐÃ LƯU ĐOẠN – GHI LIÊN TỤC").apply();
-                }
-                byte[] block = Arrays.copyOf(frame, FRAME_SIZE);
-                elapsed++; partFrames++;
-                // Backup the captured PCM BEFORE the software limiter. This
-                // preserves original audio, including possible source clipping.
+                if (!recording) break;
+                elapsed++;
+                partFrames++;
+                // RAW receives every input sample before the software limiter.
                 if (current.raw != null) {
                     current.raw.write(block);
                     current.rawBytes += block.length;
                 }
-                // VAD is based on input signal, independent of limiter output.
                 double inputPeakDb = AudioDynamics.peakDbFs(block);
                 if (elapsed % 5 == 0) {
                     limiter = cfg.getBoolean("limiterEnabled", true);
@@ -441,120 +361,71 @@ public class RecorderService extends Service {
                             cfg.getInt("attackMs", 10), cfg.getInt("releaseMs", 500));
                     boolean desiredAgc = cfg.getBoolean("agcEnabled", true);
                     if (desiredAgc != hardwareAgcSetting || hardwareAgc == null &&
-                            !hardwareAgcStatus.equals(desiredAgc ? "Thiết bị không hỗ trợ AGC" : "AGC đã tắt")) {
+                            !hardwareAgcStatus.equals(desiredAgc ? "Thiết bị không hỗ trợ AGC" : "AGC đã tắt"))
                         setHardwareAgc(desiredAgc);
-                    }
                 }
-                if (overloadWarn && inputPeakDb >= overloadThreshold) {
-                    warningUntilFrame = elapsed + 75; // keep warning 1.5 seconds
-                }
+                if (overloadWarn && inputPeakDb >= overloadThreshold)
+                    warningUntilFrame = elapsed + 75;
                 dynamics.processInPlace(block);
-
-                double amp = rms(frame);
-                double db = 20 * Math.log10(Math.max(1.0e-9, amp / 32768.0));
-                // Both the threshold and the continuous-recording switch are hot-applied
-                // within five 20 ms frames without reopening the microphone.
+                // After one-shot activation, no threshold, silence trimming, PAUSE or music hold:
+                // one input frame always produces exactly one output frame.
+                current.voice.write(block);
+                current.voiceBytes += block.length;
+                keptBytes += block.length;
                 if (elapsed % 5 == 0) {
-                    threshold = cfg.getInt("threshold", -38);
-                    thresholdEnabled = cfg.getBoolean("thresholdEnabled", false);
-                }
-                boolean loud = !thresholdEnabled || db >= threshold;
-                silence = loud ? 0 : silence + 1;
-
-                // Disabling VAD must write EVERY frame, even digital silence and
-                // captures shorter than minSpeech. Do not fake this with -80 dBFS:
-                // true silence is floored to -180 dBFS in the RMS calculation.
-                if (!thresholdEnabled) {
-                    if (!active) {
-                        active = true;
-                        segments++;
-                        kept += flush(current, pre);
-                        kept += flush(current, candidate);
-                    }
-                    kept += flush(current, tail);
-                    current.voice.write(block);
-                    current.voiceBytes += block.length;
-                    kept += block.length;
-                } else if (active) {
-                    if (loud) {
-                        kept += flush(current, tail);
-                        current.voice.write(block);
-                        current.voiceBytes += block.length;
-                        kept += block.length;
-                    } else {
-                        tail.addLast(block);
-                        if (tail.size() > tailFrames) {
-                            for (int i = 0; i < tailFrames; i++) {
-                                byte[] item = tail.removeFirst();
-                                current.voice.write(item);
-                                current.voiceBytes += item.length;
-                                kept += item.length;
-                            }
-                            pre.clear();
-                            while (!tail.isEmpty()) pre.addLast(tail.removeFirst());
-                            trim(pre, preFrames);
-                            active = false;
-                        }
-                    }
-                } else if (loud) {
-                    candidate.addLast(block);
-                    if (candidate.size() >= confirm) {
-                        active = true;
-                        segments++;
-                        kept += flush(current, pre);
-                        kept += flush(current, candidate);
-                    }
-                } else {
-                    while (!candidate.isEmpty()) pre.addLast(candidate.removeFirst());
-                    pre.addLast(block);
-                    trim(pre, preFrames);
-                }
-
-                if (elapsed % 5 == 0) {
+                    double amp = rms(frame);
+                    double db = 20 * Math.log10(Math.max(1.0e-9, amp / 32768.0));
                     int level = (int) Math.max(0, Math.min(100, (db + 60.0) * 100.0 / 60.0));
                     boolean overload = overloadWarn && elapsed <= warningUntilFrame;
-                    String capture = overload ? "⚠ TÍN HIỆU GẦN 0 dBFS – KIỂM TRA MICRO" :
-                            !thresholdEnabled ? "● GHI LIÊN TỤC – ĐÃ TẮT NGƯỠNG" :
-                            active ? "● ĐANG GIỮ ÂM THANH" : silence > warnFrames ?
-                            "! KHÔNG CÓ TIẾNG NÓI – KIỂM TRA NGUỒN" : "ĐANG LỌC KHOẢNG LẶNG";
                     state().edit().putLong("elapsedMs", elapsed * FRAME_MS)
-                            .putLong("keptMs", kept * 1000L / RecordingArchive.BYTES_PER_SEC)
-                            .putInt("segments", segments).putInt("level", level)
+                            .putLong("keptMs", keptBytes * 1000L / RecordingArchive.BYTES_PER_SEC)
+                            .putInt("segments", 1).putInt("level", level)
                             .putBoolean("overload", overload)
                             .putString("peakDb", String.format(Locale.US, "%.1f", inputPeakDb))
                             .putString("db", String.format(Locale.US, "%.1f", Math.max(-120.0, db)))
-                            .putString("capture", capture).putInt("part", part).apply();
+                            .putString("capture", overload
+                                    ? "⚠ ĐẦU VÀO GẦN QUÁ TẢI – KIỂM TRA MICRO"
+                                    : "● ĐANG GHI LIÊN TỤC")
+                            .putInt("part", part).apply();
                 }
-
-                // Refresh and fsync both WAV headers every five seconds.
                 if (elapsed % 250 == 0) RecordingArchive.sync(current);
-
                 if (partFrames >= splitFrames) {
-                    if (active && !tail.isEmpty()) kept += flush(current, tail);
                     RecordingArchive.close(current);
                     RecordingArchive.queueExport(this, current);
                     current = null;
                     part++;
                     current = RecordingArchive.open(this, session, part, saveRaw);
                     partFrames = 0;
-                    // Preserve active voiced recording across a segment boundary.
-                    // If silence was pending, the previous chunk has the tail already.
                     stateValue("part", part);
                 }
             }
-            if (current != null && active && !tail.isEmpty()) kept += flush(current, tail);
         } catch (Exception failure) {
             stateValue("error", "Lỗi ghi âm: " + failure.getMessage()
                     + ". Dữ liệu WAV tạm sẽ được khôi phục khi mở ứng dụng lần sau.");
         } finally {
+            boolean producedRecording = current != null || recording || stopping || elapsed > 0 || session != null;
             recording = false;
-            paused = false;
-            state().edit().putBoolean("running", false).putBoolean("paused", false)
+            armed = false;
+            if (!producedRecording) {
+                releaseMicrophone();
+                state().edit().putBoolean("running", false).putBoolean("armed", false)
+                        .putBoolean("starting", false).putBoolean("saving", false)
+                        .putBoolean("overload", false).putBoolean("autoStarted", false)
+                        .putInt("level", 0).putString("activeSession", "")
+                        .putString("db", "—").putString("capture", "ĐÃ HỦY CHỜ – CHƯA GHI FILE")
+                        .apply();
+                PROCESS_CAPTURING.set(false);
+                stopForeground(true);
+                stopSelf();
+                return;
+            }
+            state().edit().putBoolean("running", false).putBoolean("armed", false)
+                    .putBoolean("paused", false)
                     .putBoolean("saving", true).putBoolean("musicSuspended", false)
                     .putBoolean("overload", false).putInt("level", 0)
                     .putLong("elapsedMs", elapsed * FRAME_MS)
-                    .putLong("keptMs", kept * 1000L / RecordingArchive.BYTES_PER_SEC)
-                    .putInt("segments", segments).putString("capture",
+                    .putLong("keptMs", keptBytes * 1000L / RecordingArchive.BYTES_PER_SEC)
+                    .putInt("segments", elapsed > 0 ? 1 : 0).putString("capture",
                             discardRequested ? "ĐANG XÓA WAV PHIÊN NÀY" : "ĐANG LƯU FILE").apply();
             releaseMicrophone();
             if (current != null) {
@@ -574,12 +445,8 @@ public class RecorderService extends Service {
             }
             boolean discarded = discardRequested;
             boolean deleteOk = true;
-            if (discarded) {
-                // All queued export jobs have finished: delete only THIS session.
-                deleteOk = RecordingArchive.discardSession(this, session);
-            }
+            if (discarded) deleteOk = RecordingArchive.discardSession(this, session);
             stopping = false;
-            musicHold = false;
             discardRequested = false;
             SharedPreferences.Editor finished = state().edit()
                     .putBoolean("musicSuspended", false).putBoolean("saving", false)
@@ -605,6 +472,7 @@ public class RecorderService extends Service {
 
     @Override public void onDestroy() {
         recording = false;
+        armed = false;
         super.onDestroy();
     }
     @Override public IBinder onBind(Intent intent) { return null; }
