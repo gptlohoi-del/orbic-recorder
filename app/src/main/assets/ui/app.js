@@ -238,6 +238,13 @@
     data.noticeColor=$('noticeColor').value;
     save({noticeColor:data.noticeColor});applyTheme();
   };
+  $('start').onclick=()=>{
+    if (!current || current.running || current.armed ||
+        current.starting || current.saving || current.recovering) {
+      return;
+    }
+    send('start');
+  };
   $('autoStart').onclick=()=>{
     if(!current || !current.supportsInputTrigger || current.running || current.saving ||
         current.starting || current.recovering)return;
