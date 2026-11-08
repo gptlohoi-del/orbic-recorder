@@ -100,3 +100,7 @@ body.software-rotated-180 {
 .rotation-actions .rotate-90{background:#a85b09;border-color:#925108;color:#fff}
 .rotation-actions .rotate-button:focus-visible{outline:2px solid var(--green);outline-offset:2px}
 @media(max-width:350px){.rotation-actions{gap:3px}.rotation-actions .rotate-button{padding:3px 5px;font-size:9px}}
+/* Chữ đậm trong vùng thông báo */
+.notice-row {
+  font-weight: 700;
+}
