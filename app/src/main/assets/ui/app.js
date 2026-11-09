@@ -103,7 +103,21 @@
       input.closest('.wave-style-option').classList.toggle('selected',input.checked);
     }
     renderWaveform();
+    updateWaveTriggerGuide(current);
     updateWaveOverloadGuide(current);
+  }
+  // Native cung cấp triggerDb (dBFS RMS) cho chế độ TIẾT KIỆM.
+  // Native level cũng dựa trên RMS; đường xanh cùng thang hiển thị với sóng âm.
+  function updateWaveTriggerGuide(state){
+    const raw=state && state.triggerDb;
+    const threshold=cap(raw==null?Number(coalesce(data.triggerDb,-40)):Number(raw),-60,-15);
+    const db=Number.isFinite(threshold)?threshold:-40;
+    const fraction=(db+60)/60; // Native: -60 dBFS = 0%, 0 dBFS = 100%.
+    const mirror=activeWaveStyle==='mirror';
+    const guide=$('waveTriggerGuide');
+    guide.style.setProperty('--trigger-top',(mirror?(1-fraction)*50:(1-fraction)*100).toFixed(2)+'%');
+    guide.style.setProperty('--trigger-bottom',((1+fraction)*50).toFixed(2)+'%');
+    setText('waveTriggerLabel','PHÁT HIỆN '+db+' dBFS');
   }
   // Native cung cấp overloadDb (dBFS peak) và overload (cảnh báo từ peak thực).
   // Vùng sóng đang dùng mức RMS; đường đỏ chỉ là mốc tham chiếu trên cùng thang dBFS.
@@ -119,7 +133,11 @@
     const overload=!!(state && state.running && !state.paused && state.overload);
     guide.classList.toggle('is-overloaded',overload);
     setText('waveOverloadLabel',overload?'⚠ GẦN QUÁ TẢI':'NGƯỠNG '+db+' dBFS');
-    const description='Biểu đồ mức âm. Vạch đỏ luôn hiển thị tại ngưỡng cảnh báo '+db+' dBFS (peak).'+
+    const triggerRaw=state && state.triggerDb;
+    const trigger=Number(triggerRaw==null?coalesce(data.triggerDb,-40):triggerRaw);
+    const triggerDb=Number.isFinite(trigger)?cap(trigger,-60,-15):-40;
+    const description='Biểu đồ mức âm. Vạch xanh lam nhạt là ngưỡng phát hiện '+triggerDb+
+      ' dBFS (RMS, dùng trong chế độ TIẾT KIỆM). Vạch đỏ là ngưỡng cảnh báo '+db+' dBFS (peak).'+
       (overload?' Cảnh báo: đầu vào gần quá tải.':'');
     if($('waveform').getAttribute('aria-label')!==description)
       $('waveform').setAttribute('aria-label',description);
@@ -166,6 +184,7 @@
       if(spec.key==='silenceSeconds')value=cap(20+10*Math.round((value-20)/10),20,1000);
       // Native validates against hard safety bounds independently of UI.
       data[spec.key]=value; save({[spec.key]:value}); updateViews(); applyTheme();
+      if(spec.key==='triggerDb')updateWaveTriggerGuide({triggerDb:value});
     }
     container.querySelector('[data-op=minus]').onclick=()=>commit(Number(data[spec.key])-rule(spec).step);
     container.querySelector('[data-op=plus]').onclick=()=>commit(Number(data[spec.key])+rule(spec).step);
@@ -695,6 +714,7 @@
       $('rollback').hidden=!d.canRollback;
       levels.shift();levels.push((d.running||d.armed)?cap(Number(d.level||0),0,100):0);
       renderWaveform();
+      updateWaveTriggerGuide(d);
       updateWaveOverloadGuide(d);
       if(!settingsOpened){
         for(const key of ['uiFont','noticeFont','noticeWeight','noticeColor','uiOpacity','waveHeight','theme']) data[key]=coalesce(d[key],data[key]);

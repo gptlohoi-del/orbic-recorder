@@ -48,6 +48,12 @@
         <defs><linearGradient id="waveFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2cefc3" stop-opacity=".37"/><stop offset="100%" stop-color="#2cefc3" stop-opacity=".01"/></linearGradient></defs>
         <path id="waveArea" fill="url(#waveFill)"></path><path id="waveLine" fill="none" stroke="#3aebc1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
       </svg>
+      <!-- Vạch xanh lam nhạt: ngưỡng phát hiện tiếng động trong chế độ TIẾT KIỆM; hiện thường trực. -->
+      <div class="wave-trigger-guide" id="waveTriggerGuide" aria-hidden="true">
+        <span class="wave-trigger-line wave-trigger-line-top"></span>
+        <span class="wave-trigger-line wave-trigger-line-bottom"></span>
+        <span class="wave-trigger-label" id="waveTriggerLabel">PHÁT HIỆN -40 dBFS</span>
+      </div>
       <!-- Vạch đỏ là mốc tham chiếu luôn hiện; tín hiệu quá tải thực tế do Android xác định từ peak. -->
       <div class="wave-overload-guide" id="waveOverloadGuide" aria-hidden="true">
         <span class="wave-overload-line wave-overload-line-top"></span>

@@ -20,6 +20,12 @@
 .waveform[data-style="dots"] .wave-bars .bar.hot{background:radial-gradient(circle at center 5px,#f0c36c 2.25px,transparent 2.65px) center bottom/100% 10px repeat-y}
 .waveform:not([data-style="line"]) .wave-line-svg{display:none}
 .waveform[data-style="line"] .wave-bars{display:none}
+/* Mốc phát hiện tiếng động (RMS): xanh lam nhạt, luôn hiện ở cả bốn kiểu sóng. */
+.wave-trigger-guide{position:absolute;inset:0;z-index:3;pointer-events:none;--trigger-top:66.67%;--trigger-bottom:83.33%}
+.wave-trigger-line{position:absolute;left:0;right:0;top:var(--trigger-top);height:0;border-top:1px dashed #a6e2ff;filter:drop-shadow(0 0 1px rgba(50,170,220,.55))}
+.wave-trigger-line-bottom{display:none;top:var(--trigger-bottom)}
+.waveform[data-style="mirror"] .wave-trigger-line-bottom{display:block}
+.wave-trigger-label{position:absolute;top:var(--trigger-top);left:2px;transform:translateY(-100%);max-width:calc(100% - 5px);padding:1px 3px;background:rgba(10,43,61,.82);border-radius:3px;color:#c1eeff;font-size:8px;font-weight:600;line-height:1.15;white-space:nowrap;text-shadow:0 1px 1px #062332}
 /* Vạch tham chiếu ngưỡng peak luôn hiển thị trên màn hình ghi âm (cả 4 kiểu sóng). */
 .wave-overload-guide{position:absolute;inset:0;z-index:4;pointer-events:none;--warning-top:1.67%;--warning-bottom:98.33%}
 .wave-overload-line{position:absolute;left:0;right:0;height:0;border-top:2px dashed #ff565e;top:var(--warning-top);filter:drop-shadow(0 0 2px #7f0707)}
