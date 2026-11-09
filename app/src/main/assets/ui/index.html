@@ -48,6 +48,12 @@
         <defs><linearGradient id="waveFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2cefc3" stop-opacity=".37"/><stop offset="100%" stop-color="#2cefc3" stop-opacity=".01"/></linearGradient></defs>
         <path id="waveArea" fill="url(#waveFill)"></path><path id="waveLine" fill="none" stroke="#3aebc1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
       </svg>
+      <!-- Vạch đỏ là mốc tham chiếu luôn hiện; tín hiệu quá tải thực tế do Android xác định từ peak. -->
+      <div class="wave-overload-guide" id="waveOverloadGuide" aria-hidden="true">
+        <span class="wave-overload-line wave-overload-line-top"></span>
+        <span class="wave-overload-line wave-overload-line-bottom"></span>
+        <span class="wave-overload-label" id="waveOverloadLabel">NGƯỠNG -1 dBFS</span>
+      </div>
     </div><b id="db">— dBFS</b></div>
     <div id="safeActions" class="record-mode-actions" role="tabpanel" aria-label="Ghi âm an toàn">
       <button id="start" class="btn green" type="button">● START</button>

@@ -103,6 +103,26 @@
       input.closest('.wave-style-option').classList.toggle('selected',input.checked);
     }
     renderWaveform();
+    updateWaveOverloadGuide(current);
+  }
+  // Native cung cấp overloadDb (dBFS peak) và overload (cảnh báo từ peak thực).
+  // Vùng sóng đang dùng mức RMS; đường đỏ chỉ là mốc tham chiếu trên cùng thang dBFS.
+  function updateWaveOverloadGuide(state){
+    const raw=state && state.overloadDb;
+    const threshold=cap(raw==null?-1:Number(raw),-12,-1);
+    const db=Number.isFinite(threshold)?threshold:-1;
+    const fraction=(db+60)/60; // Thang của native level: -60 dBFS=0%, 0 dBFS=100%.
+    const mirror=activeWaveStyle==='mirror';
+    const guide=$('waveOverloadGuide');
+    guide.style.setProperty('--warning-top',(mirror?(1-fraction)*50:(1-fraction)*100).toFixed(2)+'%');
+    guide.style.setProperty('--warning-bottom',((1+fraction)*50).toFixed(2)+'%');
+    const overload=!!(state && state.running && !state.paused && state.overload);
+    guide.classList.toggle('is-overloaded',overload);
+    setText('waveOverloadLabel',overload?'⚠ GẦN QUÁ TẢI':'NGƯỠNG '+db+' dBFS');
+    const description='Biểu đồ mức âm. Vạch đỏ luôn hiển thị tại ngưỡng cảnh báo '+db+' dBFS (peak).'+
+      (overload?' Cảnh báo: đầu vào gần quá tải.':'');
+    if($('waveform').getAttribute('aria-label')!==description)
+      $('waveform').setAttribute('aria-label',description);
   }
   function renderWaveform(){
     if(activeWaveStyle==='line'){
@@ -675,6 +695,7 @@
       $('rollback').hidden=!d.canRollback;
       levels.shift();levels.push((d.running||d.armed)?cap(Number(d.level||0),0,100):0);
       renderWaveform();
+      updateWaveOverloadGuide(d);
       if(!settingsOpened){
         for(const key of ['uiFont','noticeFont','noticeWeight','noticeColor','uiOpacity','waveHeight','theme']) data[key]=coalesce(d[key],data[key]);
         if((d.waveStyle||'line')!==activeWaveStyle)applyWaveStyle(d.waveStyle||'line');
