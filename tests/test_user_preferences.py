@@ -1,4 +1,4 @@
-"""v9.5.6 tab persistence, safe default, and numeric setting bounds."""
+"""v9.5.7 tab persistence, safe default, and numeric setting bounds."""
 from pathlib import Path
 import re
 root=Path(__file__).resolve().parents[1];java=root/'app/src/main/java/com/example/orbicrecorder';ui=root/'app/src/main/assets/ui'

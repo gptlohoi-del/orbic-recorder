@@ -320,7 +320,57 @@
           'Bài đang phát sẽ giảm dần âm lượng rồi mới chuyển bài. Bản ghi vẫn được giữ an toàn.',id);
       } else send(id);
     };
-  // SAVE needs a deliberate right swipe; no destructive DISCARD or recording PAUSE.
+  // SAFE-only PAUSE needs a complete left-to-right swipe; CONTINUE is one tap.
+  let pauseRequestPending=false;
+  let pauseRequestedAt=0;
+  function setupPauseSwipe(){
+    const modal=$('pauseModal'), track=$('pauseTrack'), thumb=$('pauseThumb'), fill=$('pauseFill');
+    let pointer=null, originX=0, distance=0, since=0;
+    function reset(){
+      pointer=null;distance=0;
+      thumb.style.transform='translateX(0px)';fill.style.width='0px';
+      track.classList.remove('dragging');
+    }
+    function close(){modal.hidden=true;reset();}
+    $('recordPause').onclick=()=>{
+      if(!current||current.recordMode!=='safe'||!current.supportsRecordingPause||
+          !current.running||current.saving||current.starting||pauseRequestPending)return;
+      if(current.paused){
+        try{window.Orbic.continueRecording();}catch(e){console.error(e);}
+      }else{reset();modal.hidden=false;}
+    };
+    $('cancelPause').onclick=$('pauseBackdrop').onclick=close;
+    const limit=()=>Math.max(0,track.clientWidth-thumb.offsetWidth-8);
+    thumb.addEventListener('pointerdown',e=>{
+      if(pointer!==null||modal.hidden||e.pointerType==='mouse'&&e.button!==0)return;
+      pointer=e.pointerId;originX=e.clientX;distance=0;since=Date.now();
+      track.classList.add('dragging');thumb.setPointerCapture(e.pointerId);e.preventDefault();
+    });
+    thumb.addEventListener('pointermove',e=>{
+      if(e.pointerId!==pointer)return;
+      const direction=document.body.classList.contains('software-rotated-180')?-1:1;
+      distance=cap((e.clientX-originX)*direction,0,limit());
+      thumb.style.transform='translateX('+distance+'px)';
+      fill.style.width=(distance+thumb.offsetWidth/2)+'px';e.preventDefault();
+    });
+    thumb.addEventListener('pointerup',e=>{
+      if(e.pointerId!==pointer)return;
+      const completed=limit()>0&&distance>=limit()*.92&&Date.now()-since>=180;
+      reset();
+      if(completed&&current&&current.recordMode==='safe'&&current.running&&
+          !current.paused&&!current.saving&&!current.starting&&!pauseRequestPending){
+        close();pauseRequestPending=true;pauseRequestedAt=Date.now();
+        try{
+          if(window.Orbic&&typeof window.Orbic.pauseRecording==='function')window.Orbic.pauseRecording();
+          else{pauseRequestPending=false;setText('error','Cần APK v9.5.7 để PAUSE ghi âm');$('error').hidden=false;}
+        }catch(e){pauseRequestPending=false;console.error(e);}
+      }
+    });
+    thumb.addEventListener('pointercancel',reset);
+    return close;
+  }
+  const closePause=setupPauseSwipe();
+  // SAVE needs a deliberate right swipe; no destructive DISCARD.
   function setupSaveSwipe(){
     const modal=$('saveModal'), track=$('saveTrack'), thumb=$('saveThumb'), fill=$('saveFill');
     let pointer=null, originX=0, distance=0, since=0;
@@ -356,7 +406,7 @@
         close();finishPending=true;finishRequestedAt=Date.now();
         try{if(window.Orbic&&typeof window.Orbic.finishRecording==='function')
           window.Orbic.finishRecording('save');
-          else {finishPending=false;setText('error','Cần cài APK v9.5.6 để lưu bằng vuốt');$('error').hidden=false;}
+          else {finishPending=false;setText('error','Cần cài APK v9.5.7 để lưu bằng vuốt');$('error').hidden=false;}
         }catch(e){finishPending=false;console.error(e);}
       }
     });
@@ -530,13 +580,15 @@
       const playing=d.musicStatus!=='idle', changing=!!d.pendingMusic||!!d.pendingResume;
       if(finishPending && (!d.running || d.saving || d.error ||
           Date.now()-finishRequestedAt>8000))finishPending=false;
+      if(pauseRequestPending && (d.paused || !d.running || d.error ||
+          Date.now()-pauseRequestedAt>8000))pauseRequestPending=false;
       const fading=d.musicStatus==='fadingPause'||d.musicStatus==='fadingStop';
       const stopped=!d.running;
       const hasSong3=isThirdTrackSupported(d);
       const hasArchive=d.supportsRecordingLibrary===true;
       setText('featureCompatibility',hasSong3&&hasArchive&&d.supportsRecordTabs===true
-        ? 'APK hỗ trợ hai chế độ ghi âm, cắt lặng dài và SAVE vuốt trái → phải.'
-        : 'Cần cài APK v9.5.6 để có đủ hai chế độ native. OTA giao diện không thay đổi thuật toán thu âm.');
+        ? (d.supportsRecordingPause===true ? 'APK hỗ trợ PAUSE an toàn và hai chế độ ghi âm.' : 'Cần APK v9.5.7 cho PAUSE, các chế độ cũ vẫn có thể hoạt động.')
+        : 'Cần cài APK v9.5.7 để có đủ hai chế độ native. OTA giao diện không thay đổi thuật toán thu âm.' );
       renderRecordTabs(d);
       document.querySelectorAll('#recordNumbers input, #recordNumbers button').forEach(el=>
         el.disabled=!!d.running||!!d.armed||!!d.starting||!!d.saving);
@@ -575,6 +627,10 @@
       // Điều khiển ghi âm độc lập với điều khiển nhạc.
       // Android sẽ giữ micro tắt trong suốt thời gian nhạc phát.
       $('start').disabled=d.recordMode!=='safe'||!!d.running||!!d.armed||!!d.saving||!!d.recovering||!!d.starting;
+      $('recordPause').disabled=d.recordMode!=='safe'||!d.supportsRecordingPause||
+          !d.running||!!d.saving||!!d.starting||pauseRequestPending||finishPending;
+      $('recordPause').textContent=d.paused?'▶ CONTINUE':'Ⅱ PAUSE';
+      if((!d.running||d.paused||d.saving)&&!$('pauseModal').hidden)closePause();
       $('autoStart').disabled=d.recordMode!=='economy'||!d.supportsInputTrigger||!!d.running||!!d.saving||!!d.recovering||!!d.starting;
       $('autoStart').classList.toggle('active',!!d.armed||!!d.autoStarted&&!!d.running);
       $('autoStart').setAttribute('aria-pressed',d.armed||d.autoStarted&&d.running?'true':'false');
@@ -588,10 +644,14 @@
         ? (d.agcSupported?'CÓ HỖ TRỢ (API Android)':'KHÔNG HỖ TRỢ (API Android)')
         : 'CẦN CẬP NHẬT APK ĐỂ KIỂM TRA');
       setText('agcStatus',d.agcStatus||'Chưa khởi động micro');
-      setText('capture',d.capture||'Sẵn sàng');setText('recordState',d.running?'Đang ghi ●':d.armed?'Đang chờ ◉':'Sẵn sàng');
+      setText('capture',d.capture||'Sẵn sàng');
+      setText('recordState',d.paused?'⏸ PAUSE '+fmt(d.pausedMs):
+          d.running?'Đang ghi ●':d.armed?'Đang chờ ◉':'Sẵn sàng');
       setText('db',(d.db||'—')+' dBFS');
       setText('elapsed',fmt(d.elapsedMs));setText('kept',fmt(d.keptMs));setText('segments',d.segments||0);
-      setText('noticeMetrics','Đã thu '+fmt(d.elapsedMs)+(d.recordMode==='economy'?' · WAV '+fmt(d.keptMs):'')+' · '+(d.savedParts||0)+' file đã lưu');
+      setText('noticeMetrics',(d.paused?'⏸ ĐANG TẠM DỪNG '+fmt(d.pausedMs)+' · ':'')+
+          'Đã thu '+fmt(d.elapsedMs)+(d.recordMode==='economy'?' · WAV '+fmt(d.keptMs):'')+
+          ' · '+(d.savedParts||0)+' file đã lưu');
       setText('file',d.file||'Chưa có bản ghi');setText('savedParts',(d.savedParts||0)+' đoạn đã lưu');
       if(d.file && d.file!==lastArchivedFile){
         // A freshly exported WAV becomes available after the native file field changes.
@@ -605,7 +665,7 @@
       updateRecordingPlayer(d);
       setText('error',d.error||'');$('error').hidden=!d.error;
       if(d.error) setText('capture','⚠ '+d.error);
-      setText('otaVersion','Giao diện '+(d.otaVersion||'8.0.16'));setText('otaMessage',d.otaMessage||'Chưa kiểm tra');
+      setText('otaVersion','Giao diện '+(d.otaVersion||'8.0.17'));setText('otaMessage',d.otaMessage||'Chưa kiểm tra');
       if(!settingsOpened){
         const supportsAutoOta=typeof d.autoOtaEnabled==='boolean';
         $('autoOtaEnabled').disabled=!supportsAutoOta;

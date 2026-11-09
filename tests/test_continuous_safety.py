@@ -1,4 +1,4 @@
-"""v9.5.6: SAFE mode continuous and SAVE still requires deliberate right swipe."""
+"""v9.5.7: SAFE recording with confirmed PAUSE and SAVE both require right swipe."""
 from pathlib import Path
 import subprocess
 root=Path(__file__).resolve().parents[1]
@@ -7,7 +7,11 @@ html=(ui/'index.html').read_text();js=(ui/'app.js').read_text();css=(ui/'app.css
 activity=(native/'MainActivity.java').read_text();service=(native/'RecorderService.java').read_text()
 assert 'current.voice.write(block);' in service
 assert 'if (economy)' in service and 'compactor.accept(block,' in service
-assert 'case "PAUSE"' not in service and 'case "RESUME"' not in service
+assert 'case "PAUSE":' in service and 'case "CONTINUE":' in service
+assert 'if (safeSession && recording && !armed && !stopping && !paused)' in service
+assert 'if (safeSession && recording && !armed && !stopping && paused)' in service
+assert 'if (paused) {' in service and 'RecordingArchive.sync(current);' in service
+assert 'case "RESUME":' not in service
 assert 'case "STOP":' in service
 assert 'case "STOP_DISCARD": break;' in service
 assert 'builder.addAction(' not in service and '.addAction(' not in service
@@ -52,4 +56,4 @@ console.log('PASS: only deliberate rightward SAVE swipe can finish');
 node=node.replace('__HANDLER__',repr(handler))
 # Python repr of multiline text is compatible with a JS string literal here.
 subprocess.run(['node','-e',node],check=True)
-print('PASS: native rejects legacy PAUSE/DISCARD; safe timeline preserved')
+print('PASS: SAFE PAUSE guarded; SAVE swipe; discard rejected')

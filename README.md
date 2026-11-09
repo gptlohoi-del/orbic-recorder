@@ -1,4 +1,4 @@
-# Orbic Recorder v9.5.6 — AN TOÀN và TIẾT KIỆM
+# Orbic Recorder v9.5.7 — AN TOÀN và TIẾT KIỆM
 
 Android 9+ (minSdk 28), ứng dụng ghi WAV mono PCM 16 kHz / 16-bit và phát nhạc riêng.
 Giao diện HTML/CSS/JS chạy trong WebView; ghi âm, quản lý file và phát hiện tín hiệu
@@ -7,8 +7,11 @@ Giao diện HTML/CSS/JS chạy trong WebView; ghi âm, quản lý file và phát
 ## Hai tab ghi âm
 
 **AN TOÀN** (mặc định lần đầu hoặc khi nâng cấp): chọn START để ghi tất cả các
-khung âm thanh nhận được, kể cả khoảng lặng. Không có nút PAUSE. Chọn SAVE,
-vuốt thanh xác nhận từ trái qua phải để dừng và lưu. Không có thao tác Không lưu.
+khung âm thanh nhận được, kể cả khoảng lặng. Khi bấm PAUSE, phải
+**vuốt từ trái qua phải** để xác nhận; trong thời gian PAUSE ứng dụng giữ micro
+mở nhưng không thêm tín hiệu vào WAV. **CONTINUE chỉ cần chạm một lần**.
+Vùng thông báo hiển thị thời gian đang PAUSE. Chọn SAVE, vuốt xác nhận
+trái qua phải để dừng và lưu (kể cả khi đang tạm dừng). Không có Không lưu.
 
 **TIẾT KIỆM**: chọn BẮT ĐẦU GHI KHI CÓ TÍN HIỆU. App mở micro và chờ mức RMS
 vượt ngưỡng (mặc định -40 dBFS) liên tục khoảng 100 ms. App giữ tối đa
@@ -47,9 +50,8 @@ không xóa bản ghi cũ. WAV có thể được chia theo cấu hình 1–60 p
 ## Build, kiểm thử và cập nhật
 
 - `minSdk 28`, `targetSdk 32`, `compileSdk 35` (Android 9 vẫn có thể cài).
-- `nativeApi=12`, giao diện tích hợp `8.0.16` để tránh OTA cũ đè giao diện
-  của bản mới. **Cần build/cài APK mới**, chỉ OTA không thể bổ sung thuật toán
-  cắt khoảng lặng native.
+- `nativeApi=13`, giao diện tích hợp `8.0.17` để tránh OTA cũ đè giao diện
+  của bản mới. **Cần build/cài APK mới**, OTA giao diện không thể bổ sung lệnh PAUSE ghi âm native.
 - GitHub Actions: **Tạo APK Orbic Recorder**, hoặc bản Release có khóa ký.
   Cài đè bằng APK cùng applicationId, cùng khóa ký và versionCode cao hơn;
   không gỡ ứng dụng khi chưa sao lưu WAV.
@@ -57,4 +59,4 @@ không xóa bản ghi cũ. WAV có thể được chia theo cấu hình 1–60 p
   hoặc để GitHub Actions chạy tự động. Các test mã nguồn không thay cho thử trên
   thiết bị Android 9 thật.
 
-Xem thêm `THAY-DOI-v9.5.6.md` và `HUONG-DAN-GHI-AM-AN-TOAN.md`.
+Xem thêm `THAY-DOI-v9.5.7.md` và `HUONG-DAN-GHI-AM-AN-TOAN.md`.

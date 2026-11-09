@@ -35,7 +35,7 @@ import java.util.Collections;
 
 /** Native recorder from v4 + OTA-updateable local HTML/CSS/JS user interface. */
 public class MainActivity extends Activity {
-    private static final String NATIVE_LABEL = "ORBIC RECORDER v9.5.6 · AN TOÀN / TIẾT KIỆM";
+    private static final String NATIVE_LABEL = "ORBIC RECORDER v9.5.7 · AN TOÀN / TIẾT KIỆM";
     private static final String LOCAL_ORIGIN = "https://appassets.androidplatform.net";
     private static final int REQUEST_MIC = 101;
     private static final int REQUEST_FOLDER = 102;
@@ -569,6 +569,8 @@ public class MainActivity extends Activity {
                 data.put("song2Name", musicName(2));
                 data.put("song3Name", musicName(3));
                 data.put("paused", p.getBoolean("paused", false));
+                data.put("pausedMs", p.getLong("pausedMs", 0L));
+                data.put("supportsRecordingPause", true);
                 data.put("saving", p.getBoolean("saving", false));
                 data.put("starting", p.getBoolean("starting", false));
                 data.put("level", p.getInt("level", 0));
@@ -699,8 +701,8 @@ public class MainActivity extends Activity {
                         if (recorder().getBoolean("armed", false)) sendRecorder("DISARM");
                         else startRecording(true);
                         break;
-                    // Deliberate stop/discard only through finishRecording() from swipe UI.
-                    // Old OTA tap commands "stop", "discard", "pause", "resume" are ignored.
+                    // SAVE and SAFE PAUSE have dedicated UI confirmation bridges.
+                    // Old generic "stop", "discard", "pause", "resume" remain ignored.
                     case "chooseFolder": chooseFolder(); break;
                     case "resetFolder":
                         if (captureActive()) { toast("Hãy dừng ghi trước khi đổi thư mục"); break; }
@@ -719,6 +721,30 @@ public class MainActivity extends Activity {
                         else toast("Đã quay lại giao diện trước"); break;
                     default: break;
                 }
+            });
+        }
+
+        @JavascriptInterface public void pauseRecording() {
+            // Called only after the SAFE tab's full right swipe confirmation.
+            runOnUiThread(() -> {
+                if (!"safe".equals(config().getString("recordMode", "safe")) ||
+                        !recorder().getBoolean("running", false) ||
+                        recorder().getBoolean("paused", false) ||
+                        recorder().getBoolean("starting", false) ||
+                        recorder().getBoolean("saving", false)) return;
+                sendRecorder("PAUSE");
+            });
+        }
+
+        @JavascriptInterface public void continueRecording() {
+            // CONTINUE is an intentional single tap, with no swipe confirmation.
+            runOnUiThread(() -> {
+                if (!"safe".equals(config().getString("recordMode", "safe")) ||
+                        !recorder().getBoolean("running", false) ||
+                        !recorder().getBoolean("paused", false) ||
+                        recorder().getBoolean("starting", false) ||
+                        recorder().getBoolean("saving", false)) return;
+                sendRecorder("CONTINUE");
             });
         }
 

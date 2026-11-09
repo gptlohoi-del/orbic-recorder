@@ -111,7 +111,7 @@ body.software-rotated-180 {
 .auto-start-toggle:disabled:not(.active){opacity:.43}
 @media(max-height:620px){.auto-start-toggle{min-height:27px;padding:3px 6px}}
 
-/* v9.5.6: two persistable, mutually exclusive recording tabs. */
+/* Two persistable, mutually exclusive recording tabs. */
 .record-tabs{display:grid;grid-template-columns:1fr 1fr;gap:5px;flex:0 0 auto}
 .record-tab{background:var(--shade);color:var(--ink);border:1px solid var(--border);border-radius:9px;min-height:34px;font-size:clamp(9px,2.8vw,12px);font-weight:850}
 .record-tab.selected{background:#117958;border-color:#0b6547;color:#fff}
@@ -121,3 +121,10 @@ body.software-rotated-180 {
 .record-mode-actions>.btn,.record-mode-actions>.auto-start-toggle{flex:1;min-height:40px}
 .record-save{width:100%;min-height:43px;flex:0 0 auto}
 #systemNote:not([hidden]){display:block;color:#aa340e;font-size:11px;font-weight:900;padding:3px 2px;white-space:normal}
+
+/* v9.5.7: SAFE PAUSE confirmation; ECONOMY remains unchanged. */
+#safeActions>.btn{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.pause-dialog .swipe-track{border-color:var(--yellow)}
+.pause-dialog .swipe-fill,.pause-dialog .swipe-thumb{background:var(--yellow)}
+#recordPause{font-weight:850}
+.record-pause-banner{color:#c05b0b;font-weight:900;font-size:12px;line-height:1.3}

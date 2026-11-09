@@ -1,4 +1,4 @@
-"""v9.5.6 auto trigger + economy settings + warning display contracts."""
+"""v9.5.7 auto trigger + economy settings + warning display contracts."""
 from pathlib import Path
 import re,subprocess
 r=Path(__file__).resolve().parents[1];java=r/'app/src/main/java/com/example/orbicrecorder';ui=r/'app/src/main/assets/ui'
@@ -24,6 +24,6 @@ assert "send('arm');" in j and "$('autoStart').classList.toggle('active'" in j
 assert "window.Orbic.finishRecording('save')" in j
 assert "setText('systemNote'" in j
 assert 'var(--notice-color)' in c and 'var(--notice-weight)' in c
-assert 'NATIVE_API = 12' in (java/'OtaManager.java').read_text()
+assert 'NATIVE_API = 13' in (java/'OtaManager.java').read_text()
 subprocess.run(['node','--check',str(ui/'app.js')],check=True)
 print('PASS: auto trigger, long-silence trimming, preference, mic and disk warning, notice typography')

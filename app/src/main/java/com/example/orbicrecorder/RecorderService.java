@@ -13,6 +13,7 @@ import android.media.AudioRecord;
 import android.media.MediaRecorder;
 import android.media.audiofx.AutomaticGainControl;
 import android.os.IBinder;
+import android.os.SystemClock;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -38,6 +39,10 @@ public class RecorderService extends Service {
     private volatile boolean recording;
     private volatile boolean armed;
     private volatile boolean stopping;
+    // Recording stays active while paused; only SAFE mode can suspend WAV writes.
+    private volatile boolean paused;
+    private volatile boolean safeSession;
+    private volatile long pauseStartedAt;
     private volatile boolean discardRequested;
     private AudioRecord audio;
     private int initialDeviceId = -1;
@@ -73,6 +78,7 @@ public class RecorderService extends Service {
                 .setContentTitle("Orbic Recorder – Ghi âm")
                 .setContentText(stopping ? "Đang hoàn thiện WAV" : !warning.isEmpty() ? warning
                         : armed ? "Đang chờ tín hiệu từ micro – chạm ứng dụng để hủy chờ"
+                        : paused ? "⏸ ĐANG PAUSE – chạm ứng dụng để CONTINUE hoặc SAVE"
                         : "Đang ghi – mở ứng dụng, vuốt sang phải để LƯU")
                 .setOnlyAlertOnce(true)
                 .setContentIntent(PendingIntent.getActivity(this, 0,
@@ -97,19 +103,40 @@ public class RecorderService extends Service {
             case "DISARM":
                 if (armed && !recording && !stopping) armed = false;
                 break;
+            // Only SAFE recording supports PAUSE; it keeps the mic open but writes no PCM.
+            // The UI exposes PAUSE only after a completed left-to-right confirmation swipe.
+            case "PAUSE":
+                if (safeSession && recording && !armed && !stopping && !paused) {
+                    paused = true;
+                    pauseStartedAt = SystemClock.elapsedRealtime();
+                    state().edit().putBoolean("paused", true).putLong("pausedMs", 0L)
+                            .putString("capture", "⏸ AN TOÀN – ĐANG TẠM DỪNG GHI").apply();
+                    notifyChanged();
+                }
+                break;
+            case "CONTINUE":
+                if (safeSession && recording && !armed && !stopping && paused) {
+                    paused = false;
+                    state().edit().putBoolean("paused", false).putLong("pausedMs", 0L)
+                            .putString("capture", "● AN TOÀN – ĐÃ TIẾP TỤC GHI").apply();
+                    notifyChanged();
+                }
+                break;
             // Destructive legacy command intentionally not supported by the new UI.
             case "STOP_DISCARD": break;
             case "STOP":
                 if (recording) {
                     stopping = true;
                     recording = false;
+                    paused = false;
+                    stateValue("paused", false);
                     state().edit().putBoolean("saving", true)
                             .putString("capture", "ĐANG LƯU FILE WAV").apply();
                     notifyChanged();
                 } else if (!stopping && !armed) stopSelf();
                 break;
-            // Ignore legacy notification and old OTA commands. Only SAVE/STOP
-            // can finish; there is no pausing the recording.
+            // Ignore legacy notification and old OTA generic commands. Only the
+            // deliberate swipe UI exposes PAUSE; STOP still requires SAVE swipe.
             default: break;
         }
         return START_NOT_STICKY;
@@ -130,13 +157,17 @@ public class RecorderService extends Service {
             audio.startRecording();
             recording = !automatic;
             armed = automatic;
+            safeSession = !automatic;
+            paused = false;
+            pauseStartedAt = 0L;
             stopping = false;
             discardRequested = false;
             AudioDeviceInfo device = audio == null ? null : audio.getRoutedDevice();
             initialDeviceId = device == null ? -1 : device.getId();
             state().edit().putBoolean("running", !automatic).putBoolean("armed", automatic)
                     .putBoolean("autoStarted", false).putBoolean("saving", false)
-                    .putBoolean("paused", false).putBoolean("musicSuspended", false)
+                    .putBoolean("paused", false).putLong("pausedMs", 0L)
+                    .putBoolean("musicSuspended", false)
                     .putBoolean("overload", false).putString("agcStatus", hardwareAgcStatus)
                     .putString("micWarning", "").putString("storageWarning", "")
                     .putBoolean("starting", false).putString("error", "")
@@ -160,6 +191,8 @@ public class RecorderService extends Service {
             PROCESS_CAPTURING.set(false);
             recording = false;
             armed = false;
+            paused = false;
+            safeSession = false;
             stopping = false;
             state().edit().putBoolean("running", false).putBoolean("armed", false)
                     .putBoolean("saving", false)
@@ -316,6 +349,8 @@ public class RecorderService extends Service {
         final int triggerDb = Math.max(-60, Math.min(-15, cfg.getInt("triggerDb", -40)));
         InputSignalTrigger signal = new InputSignalTrigger(triggerDb, 50, 5);
         long waitingFrames = 0;
+        long pausedFrames = 0;
+        boolean pauseSynced = false;
         try {
             if (!automatic) current = RecordingArchive.open(this, session, part, saveRaw);
             while (recording || armed) {
@@ -384,6 +419,22 @@ public class RecorderService extends Service {
                     continue;
                 }
                 if (!recording) break;
+                if (paused) {
+                    // Consume PCM while paused so the AudioRecord buffer cannot overflow.
+                    // Do not write any samples: WAV duration excludes the paused interval.
+                    if (!pauseSynced && current != null) {
+                        RecordingArchive.sync(current);
+                        pauseSynced = true;
+                    }
+                    pausedFrames++;
+                    if (pausedFrames % 10 == 0) {
+                        stateValue("pausedMs", Math.max(0L,
+                                SystemClock.elapsedRealtime() - pauseStartedAt));
+                    }
+                    checkCaptureWarnings(audio, pausedFrames);
+                    continue;
+                }
+                pauseSynced = false;
                 elapsed++;
                 partFrames++;
                 double inputPeakDb = AudioDynamics.peakDbFs(block);
@@ -401,8 +452,8 @@ public class RecorderService extends Service {
                 if (overloadWarn && inputPeakDb >= overloadThreshold)
                     warningUntilFrame = elapsed + 75;
                 dynamics.processInPlace(block);
-                // Safe always writes everything; economy only shortens quiet spans
-                // reaching the selected duration. There is never a PAUSE.
+                // SAFE writes every captured frame except during a user-confirmed PAUSE.
+                // ECONOMY never pauses; it only compacts qualifying quiet spans.
                 long before = current.voiceBytes;
                 if (economy) {
                     double dbRms = 20 * Math.log10(Math.max(1.0e-9, rms(frame) / 32768.0));
@@ -450,10 +501,13 @@ public class RecorderService extends Service {
             boolean producedRecording = current != null || recording || stopping || elapsed > 0 || session != null;
             recording = false;
             armed = false;
+            paused = false;
+            safeSession = false;
             if (!producedRecording) {
                 releaseMicrophone();
                 state().edit().putBoolean("running", false).putBoolean("armed", false)
                         .putBoolean("starting", false).putBoolean("saving", false)
+                        .putBoolean("paused", false).putLong("pausedMs", 0L)
                         .putBoolean("overload", false).putBoolean("autoStarted", false)
                     .putString("micWarning", "").putString("storageWarning", "")
                         .putInt("level", 0).putString("activeSession", "")
@@ -474,7 +528,7 @@ public class RecorderService extends Service {
                 }
             }
             state().edit().putBoolean("running", false).putBoolean("armed", false)
-                    .putBoolean("paused", false)
+                    .putBoolean("paused", false).putLong("pausedMs", 0L)
                     .putBoolean("saving", true).putBoolean("musicSuspended", false)
                     .putBoolean("overload", false).putInt("level", 0)
                     .putLong("elapsedMs", elapsed * FRAME_MS)
@@ -528,6 +582,8 @@ public class RecorderService extends Service {
     @Override public void onDestroy() {
         recording = false;
         armed = false;
+        paused = false;
+        safeSession = false;
         super.onDestroy();
     }
     @Override public IBinder onBind(Intent intent) { return null; }
