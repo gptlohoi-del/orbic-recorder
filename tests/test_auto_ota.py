@@ -38,7 +38,7 @@ assert '.remove("autoSkippedVersion").commit()' in manager
 assert 'validSignature(manifest)' in manager
 assert 'if (!hash(archive).equals(manifest.getString("sha256")))' in manager
 assert '"downloading".equals(ota.getStatus())' in activity
-assert 'public static final String BUILTIN_VERSION = "8.0.20"' in manager
+assert 'public static final String BUILTIN_VERSION = "8.0.17"' in manager
 assert 'public static final int NATIVE_API = 13' in manager
 assert 'minSdk 28' in gradle and 'versionCode (220000 + githubRunNumber)' in gradle
 assert 'max(newest, version_tuple(older))' in publisher
