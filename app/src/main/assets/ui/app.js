@@ -20,7 +20,7 @@
     {key:'uiFont',label:'Tỷ lệ kích thước chữ toàn giao diện',unit:'%',default:100,min:75,max:160,step:5,group:'view'},
     {key:'noticeFont',label:'Kích thước chữ vùng THÔNG BÁO',unit:'%',default:100,min:75,max:200,step:5,group:'notice'},
     {key:'noticeWeight',label:'Độ đậm chữ vùng THÔNG BÁO',unit:'',default:900,min:400,max:900,step:100,group:'notice'},
-    {key:'triggerDb',label:'Ngưỡng tín hiệu (bắt đầu / nhận diện lặng trong TIẾT KIỆM)',unit:'dBFS',default:-100,min:-60,max:-15,step:1,group:'record'},
+    {key:'triggerDb',label:'Ngưỡng tín hiệu (bắt đầu / nhận diện lặng trong TIẾT KIỆM)',unit:'dBFS',default:-80,min:-100,max:-15,step:1,group:'record'},
     {key:'silenceSeconds',label:'Chỉ cắt khi khoảng lặng dài tối thiểu',unit:'giây',default:60,min:20,max:1000,step:10,hardMin:20,hardMax:1000,group:'record'},
     {key:'uiOpacity',label:'Độ đậm nền các khung',unit:'%',default:100,min:30,max:100,step:5,group:'view'},
     {key:'waveHeight',label:'Độ cao vùng sóng âm',unit:'px',default:92,min:45,max:135,step:5,hardMin:30,hardMax:180,group:'view'}
