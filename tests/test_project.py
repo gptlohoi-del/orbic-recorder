@@ -20,7 +20,7 @@ assert 'AudioDynamics dynamics = new AudioDynamics();' in service
 assert 'music.requestPause' in activity and 'music.requestStop' in activity
 assert 'supportsRecordTabs' in activity
 assert 'minSdk 28' in gradle and '220000 + githubRunNumber' in gradle
-assert 'NATIVE_API = 13' in ota and 'BUILTIN_VERSION = "8.0.17"' in ota
+assert 'NATIVE_API = 13' in ota and 'BUILTIN_VERSION = "8.0.20"' in ota
 assert '.record-tab.selected' in css
 assert 'data.put("supportsRecordingPause", true)' in activity
 subprocess.run(['node','--check',str(ui/'app.js')],check=True)

@@ -195,31 +195,72 @@
     $(''+spec.group+'Numbers').append(container);
   }
   specs.forEach(presentNumber);
+  // Allow MIN/MAX to change independently. A narrower range automatically brings
+  // DEFAULT (and STEP when necessary) back inside the new range. Android's native
+  // limits remain authoritative: this function never expands their safe bounds.
+  function adjustAdvancedLimit(previous, field, value, hardMin, hardMax) {
+    if (!Number.isInteger(value)) return {error:'Vui lòng nhập số nguyên.'};
+    const next={min:previous.min,max:previous.max,step:previous.step,default:previous.default};
+    if (field==='min' || field==='max') {
+      if (value<hardMin || value>hardMax)
+        return {error:`${field.toUpperCase()} chỉ được từ ${hardMin} đến ${hardMax}.`};
+      next[field]=value;
+      // If the endpoints cross, move the opposite endpoint instead of rejecting
+      // the first edit and making users change fields in an unnatural order.
+      if (next.min>next.max) {
+        if (field==='min') next.max=next.min;
+        else next.min=next.max;
+      }
+      next.default=cap(next.default,next.min,next.max);
+      next.step=cap(next.step,1,next.max-next.min+1);
+    } else if (field==='step') {
+      if (value<1 || value>next.max-next.min+1)
+        return {error:`STEP chỉ được từ 1 đến ${next.max-next.min+1}.`};
+      next.step=value;
+    } else if (field==='default') {
+      if (value<next.min || value>next.max)
+        return {error:`DEFAULT phải nằm từ MIN ${next.min} đến MAX ${next.max}.`};
+      next.default=value;
+    } else return {error:'Trường dữ liệu không hợp lệ.'};
+    return {bounds:next};
+  }
   function renderAdvanced() {
     const wrap=$('advancedNumbers'); while(wrap.firstChild)wrap.removeChild(wrap.firstChild);
     for(const spec of specs.filter(s=>s.key!=='silenceSeconds')){
       const r=rule(spec), item=document.createElement('div');item.className='advanced-item';
       const name=document.createElement('strong'); name.textContent=spec.label; item.append(name);
+      const lo=coalesce(spec.hardMin,spec.min), hi=coalesce(spec.hardMax,spec.max);
+      const guide=document.createElement('span'); guide.className='advanced-bound-hint';
+      guide.textContent=`Khoảng MIN/MAX cho phép: ${lo} đến ${hi}${spec.unit?' '+spec.unit:''}`;
+      item.append(guide);
       const fields={};
       for(const field of ['min','max','step','default']){
         const label=document.createElement('label');label.textContent=field.toUpperCase();
         const input=document.createElement('input');input.type='number';input.step='1';input.value=r[field];
-        const lo=coalesce(spec.hardMin,spec.min), hi=coalesce(spec.hardMax,spec.max);
         input.min=(field==='step'?1:lo);input.max=(field==='step'?hi-lo+1:hi);
         label.append(input);item.append(label);fields[field]=input;
       }
-      for(const input of Object.values(fields))input.onchange=()=>{
-        const proposed={}; for(const k of Object.keys(fields))proposed[k]=Number(fields[k].value);
-        const lo=coalesce(spec.hardMin,spec.min),hi=coalesce(spec.hardMax,spec.max);
-        if(Object.values(proposed).some(v=>!Number.isInteger(v)) || proposed.min<lo || proposed.max>hi || proposed.min>proposed.max || proposed.step<1 || proposed.step>proposed.max-proposed.min+1 || proposed.default<proposed.min || proposed.default>proposed.max){
-          alert(`Giá trị không hợp lệ. Giới hạn an toàn: ${lo} đến ${hi}.`);
-          renderAdvanced();return;
+      for(const [field,input] of Object.entries(fields))input.onchange=()=>{
+        // An empty input must not silently become the number zero.
+        const entered=input.value.trim();
+        const result=adjustAdvancedLimit(rule(spec),field,entered===''?NaN:Number(entered),lo,hi);
+        if (result.error){
+          setText('saveStatus',result.error);
+          alert(result.error);
+          input.value=rule(spec)[field];
+          return;
         }
+        const proposed=result.bounds;
         limits[spec.key]=proposed;
-        data[spec.key]=cap(Number(coalesce(data[spec.key],proposed.default)),proposed.min,proposed.max);
+        const value=Number(coalesce(data[spec.key],proposed.default));
+        data[spec.key]=cap(Number.isFinite(value)?value:proposed.default,proposed.min,proposed.max);
+        // Save the bounds and its clamped current value in the same native call.
         save({numericLimits:limits,[spec.key]:data[spec.key]});
+        for(const key of Object.keys(fields))fields[key].value=proposed[key];
         document.querySelector(`[data-key="${spec.key}"]`).updateViews();
-        setText('saveStatus','Đã tự lưu giới hạn');
+        applyTheme();
+        if(spec.key==='triggerDb')updateWaveTriggerGuide({triggerDb:data[spec.key]});
+        setText('saveStatus','Đã gửi lưu giới hạn');
       };
       wrap.append(item);
     }
@@ -704,7 +745,7 @@
       updateRecordingPlayer(d);
       setText('error',d.error||'');$('error').hidden=!d.error;
       if(d.error) setText('capture','⚠ '+d.error);
-      setText('otaVersion','Giao diện '+(d.otaVersion||'8.0.17'));setText('otaMessage',d.otaMessage||'Chưa kiểm tra');
+      setText('otaVersion','Giao diện '+(d.otaVersion||'8.0.20'));setText('otaMessage',d.otaMessage||'Chưa kiểm tra');
       if(!settingsOpened){
         const supportsAutoOta=typeof d.autoOtaEnabled==='boolean';
         $('autoOtaEnabled').disabled=!supportsAutoOta;

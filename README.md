@@ -50,7 +50,7 @@ không xóa bản ghi cũ. WAV có thể được chia theo cấu hình 1–60 p
 ## Build, kiểm thử và cập nhật
 
 - `minSdk 28`, `targetSdk 32`, `compileSdk 35` (Android 9 vẫn có thể cài).
-- `nativeApi=13`, giao diện tích hợp `8.0.17` để tránh OTA cũ đè giao diện
+- `nativeApi=13`, giao diện tích hợp `8.0.20` để tránh OTA cũ đè giao diện
   của bản mới. **Cần build/cài APK mới**, OTA giao diện không thể bổ sung lệnh PAUSE ghi âm native.
 - GitHub Actions: **Tạo APK Orbic Recorder**, hoặc bản Release có khóa ký.
   Cài đè bằng APK cùng applicationId, cùng khóa ký và versionCode cao hơn;

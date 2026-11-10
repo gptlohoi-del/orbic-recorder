@@ -50,7 +50,7 @@ assert 'data.put("supportsRotation90", true);' in src
 assert '@JavascriptInterface public boolean supportsQuarterTurn() { return true; }' in src
 assert 'case "rotate90": rotate90(); break;' in src
 assert 'case "rotate180": rotate180(); break;' in src
-assert 'NATIVE_API = 13' in ota and 'BUILTIN_VERSION = "8.0.17"' in ota
+assert 'NATIVE_API = 13' in ota and 'BUILTIN_VERSION = "8.0.20"' in ota
 assert 'NATIVE_API = 13' in publisher
 assert 'versionCode (220000 + githubRunNumber)' in gradle
 assert 'minSdk 28' in gradle
