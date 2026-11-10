@@ -19,7 +19,7 @@ public final class InputSignalTrigger {
     private double lastDb = -120;
 
     public InputSignalTrigger(int triggerDb, int bufferFrames, int consecutiveFrames) {
-        if (triggerDb < -60 || triggerDb > -15 || bufferFrames < 1 || consecutiveFrames < 1)
+        if (triggerDb < -100 || triggerDb > -15 || bufferFrames < 1 || consecutiveFrames < 1)
             throw new IllegalArgumentException("Invalid trigger settings");
         this.triggerDb = triggerDb;
         this.bufferFrames = bufferFrames;

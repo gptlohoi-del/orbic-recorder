@@ -20,7 +20,7 @@
     {key:'uiFont',label:'Tỷ lệ kích thước chữ toàn giao diện',unit:'%',default:100,min:75,max:160,step:5,group:'view'},
     {key:'noticeFont',label:'Kích thước chữ vùng THÔNG BÁO',unit:'%',default:100,min:75,max:200,step:5,group:'notice'},
     {key:'noticeWeight',label:'Độ đậm chữ vùng THÔNG BÁO',unit:'',default:900,min:400,max:900,step:100,group:'notice'},
-    {key:'triggerDb',label:'Ngưỡng tín hiệu (bắt đầu / nhận diện lặng trong TIẾT KIỆM)',unit:'dBFS',default:-40,min:-60,max:-15,step:1,group:'record'},
+    {key:'triggerDb',label:'Ngưỡng tín hiệu (bắt đầu / nhận diện lặng trong TIẾT KIỆM)',unit:'dBFS',default:-100,min:-60,max:-15,step:1,group:'record'},
     {key:'silenceSeconds',label:'Chỉ cắt khi khoảng lặng dài tối thiểu',unit:'giây',default:60,min:20,max:1000,step:10,hardMin:20,hardMax:1000,group:'record'},
     {key:'uiOpacity',label:'Độ đậm nền các khung',unit:'%',default:100,min:30,max:100,step:5,group:'view'},
     {key:'waveHeight',label:'Độ cao vùng sóng âm',unit:'px',default:92,min:45,max:135,step:5,hardMin:30,hardMax:180,group:'view'}
@@ -110,9 +110,9 @@
   // Native level cũng dựa trên RMS; đường xanh cùng thang hiển thị với sóng âm.
   function updateWaveTriggerGuide(state){
     const raw=state && state.triggerDb;
-    const threshold=cap(raw==null?Number(coalesce(data.triggerDb,-40)):Number(raw),-60,-15);
+    const threshold=cap(raw==null?Number(coalesce(data.triggerDb,-40)):Number(raw),-100,-15);
     const db=Number.isFinite(threshold)?threshold:-40;
-    const fraction=(db+60)/60; // Native: -60 dBFS = 0%, 0 dBFS = 100%.
+    const fraction=cap((db+60)/60,0,1);
     const mirror=activeWaveStyle==='mirror';
     const guide=$('waveTriggerGuide');
     guide.style.setProperty('--trigger-top',(mirror?(1-fraction)*50:(1-fraction)*100).toFixed(2)+'%');
@@ -135,7 +135,7 @@
     setText('waveOverloadLabel',overload?'⚠ GẦN QUÁ TẢI':'NGƯỠNG '+db+' dBFS');
     const triggerRaw=state && state.triggerDb;
     const trigger=Number(triggerRaw==null?coalesce(data.triggerDb,-40):triggerRaw);
-    const triggerDb=Number.isFinite(trigger)?cap(trigger,-60,-15):-40;
+    const triggerDb=Number.isFinite(trigger)?cap(trigger,-100,-15):-40;
     const description='Biểu đồ mức âm. Vạch xanh lam nhạt là ngưỡng phát hiện '+triggerDb+
       ' dBFS (RMS, dùng trong chế độ TIẾT KIỆM). Vạch đỏ là ngưỡng cảnh báo '+db+' dBFS (peak).'+
       (overload?' Cảnh báo: đầu vào gần quá tải.':'');

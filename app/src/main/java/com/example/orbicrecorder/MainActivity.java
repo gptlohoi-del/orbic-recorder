@@ -768,7 +768,7 @@ public class MainActivity extends Activity {
                 JSONObject v = new JSONObject(json);
                 String[] numeric = { "fadeIn", "fadeOut", "pauseStopFade", "musicVolume", "listenDelay", "uiFont", "noticeFont", "noticeWeight", "uiOpacity", "waveHeight", "triggerDb", "silenceSeconds",
                         "limitDb", "attackMs", "releaseMs", "overloadDb" };
-                int[] low = { 0, 0, 0, 0, 0, 75, 75, 400, 30, 30, -60, 20, -30, 1, 20, -12 };
+                int[] low = { 0, 0, 0, 0, 0, 75, 75, 400, 30, 30, -100, 20, -30, 1, 20, -12 };
                 int[] high = { 30000, 30000, 15000, 100, 5000, 160, 200, 900, 100, 180, -15, 1000, -1, 250, 5000, -1 };
                 SharedPreferences.Editor edit = config().edit();
                 for (int i = 0; i < numeric.length; i++) {

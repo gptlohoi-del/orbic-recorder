@@ -330,7 +330,7 @@ public class RecorderService extends Service {
         int selectedSeconds = cfg.getInt("silenceSeconds", 60);
         final int silenceSeconds = selectedSeconds >= 20 && selectedSeconds <= 1000
                 && (selectedSeconds - 20) % 10 == 0 ? selectedSeconds : 60;
-        final int silenceDb = Math.max(-60, Math.min(-15, cfg.getInt("triggerDb", -40)));
+        final int silenceDb = Math.max(-100, Math.min(-15, cfg.getInt("triggerDb", -40)));
         final SilenceCompactor compactor = economy
                 ? new SilenceCompactor(silenceSeconds, FRAME_MS, 2) : null;
         AudioDynamics dynamics = new AudioDynamics();
@@ -346,7 +346,7 @@ public class RecorderService extends Service {
         RecordingArchive.Segment current = null;
         byte[] frame = new byte[FRAME_SIZE];
         // Pre-roll and one-shot input qualification are independently unit-tested.
-        final int triggerDb = Math.max(-60, Math.min(-15, cfg.getInt("triggerDb", -40)));
+        final int triggerDb = Math.max(-100, Math.min(-15, cfg.getInt("triggerDb", -40)));
         InputSignalTrigger signal = new InputSignalTrigger(triggerDb, 50, 5);
         long waitingFrames = 0;
         long pausedFrames = 0;
